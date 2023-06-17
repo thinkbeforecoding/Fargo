@@ -27,7 +27,7 @@ let ``Token.ofList should skip null entries``() =
     =! [ token "cmd" 0 3
          token "value" 4 9 ]
 [<Fact>]
-let ``Token.ofString should accept null spaces``() = 
+let ``Token.ofString should accept null``() = 
     Token.ofString null
     =! []
 

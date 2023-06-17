@@ -211,7 +211,7 @@ let arg name alt description completer: Arg<_> =
                 match pos with
                 | ValueSome pos ->
                     Complete (usage.Completer ""), remaining , [ usage]
-                | ValueNone -> Failure ["Missing value"], remaining, [ usage ] 
+                | ValueNone -> Failure [$"Argument {usage.Name} value is missing"], remaining, [ usage ] 
             else
                 Success None, remaining @ tokens , [ usage ]
         | [] ->
@@ -222,34 +222,14 @@ let arg name alt description completer: Arg<_> =
     fun pos tokens -> findArg pos tokens []
 
 let req name alt description completer: Arg<_> =
-    let usage = { Name = "--" + name; Alt = Alt.ofString alt; Description = description; Completer = completer }
-    let rec findArg pos tokens remaining =
-        match tokens with
-        | x :: ((y :: tail) as rest) ->
-            if Usage.isStop pos usage x then
-                Usage.complete usage x.Text, remaining @ tokens, [usage]
-            elif Usage.isMatch usage x then
-                match pos with
-                | ValueSome pos ->
-                    if pos <= y.End then
-                        Complete (usage.Completer y.Text), remaining @ tail, [usage]
-                    else
-                        Success (y.Text), remaining @ tail, [usage]
-
-                | ValueNone -> Success (y.Text), remaining @ tail, [usage]
-            else
-                findArg pos rest (remaining @ [x])
-        | [x]  ->
-            if Usage.isStop pos usage x then
-                Usage.complete usage x.Text , remaining @ tokens, [usage]
-            else
-                Failure [$"Required argument {usage.Name} not found"], remaining @ tokens , [ usage ]
-        | [] ->
-            match pos with
-            | ValueSome _ ->
-                Usage.complete usage "" , remaining @ tokens, [usage]
-            | ValueNone -> Failure [$"Required argument {usage.Name} not found"], remaining , [usage]
-    fun  pos tokens -> findArg pos tokens []
+    let arg = arg name alt description completer
+    fun pos tokens ->
+        match arg pos tokens with
+        | Success (Some v), rest, usage -> Success v, rest, usage
+        | Success None, rest, (usage :: _ as usages) -> Failure [$"Required argument {usage.Name} not found"], rest, usages
+        | Success None, _, _ -> failwith "Unexpected parsing error"
+        | Failure e, rest, usage -> Failure e, rest, usage
+        | Complete c, rest, usage -> Complete c, rest, usage
 
 let flag name alt description =
     let usage = {Name = "--" + name; Alt = Alt.ofString alt; Description = description; Completer = fun _ -> [] }
@@ -270,22 +250,14 @@ let flag name alt description =
     fun pos tokens -> findFlag pos tokens []
 
 let reqFlag name alt description =
-    let usage = {Name = "--" + name; Alt = Alt.ofString alt; Description = description; Completer = fun _ -> [] }
-    let rec findFlag pos tokens remaining =
-        match tokens with
-        | x :: rest ->
-            if Usage.isStop pos usage x then
-                Usage.complete usage x.Text, remaining @ tokens, [usage]
-            elif Usage.isMatch usage x then
-                Success true, remaining @ rest, [usage]
-            else
-                findFlag pos rest (remaining @ [x])
-        | [] ->
-            match pos with
-            | ValueSome _ ->
-                Usage.complete usage "" , remaining @ tokens, [usage]
-            | ValueNone -> Failure [$"Flag --{name} not found"], remaining, [usage]
-    fun pos tokens -> findFlag pos tokens []
+    let f = flag name alt description
+    fun pos tokens ->
+        match f pos tokens with
+        | Success true, rest, usage -> Success true, rest, usage
+        | Success false, rest, (usage::_ as usages)  -> Failure [ $"Required flag {usage.Name} not found"], rest, usages
+        | Success false, rest, [] -> failwith "Unexpected parsing error"
+        | Failure e, rest, usage -> Failure e, rest, usage
+        | Complete c, rest, usage -> Complete c, rest, usage
 
 let parse (f: 'a -> Result<'b, string>) (arg: Arg<'a>) : Arg<'b>  =
     fun pos tokens ->
