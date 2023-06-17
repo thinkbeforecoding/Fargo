@@ -134,15 +134,7 @@ module Usage =
     let isStop pos usage token =
         match pos with
         | ValueSome pos ->
-            if pos <= token.End then
-                if pos >= token.Start then
-                    let tokenStart = token.Text.Substring(0,pos-token.Start)
-                    usage.Name.StartsWith(tokenStart)
-                    || match usage.Alt with Some alt -> alt.StartsWith(tokenStart) | None -> false
-                else
-                    true
-            else
-                false
+            pos >= token.Start && pos <= token.End
         | ValueNone -> false
     
     let (|IsPrefix|_|) pos usage token =
@@ -213,10 +205,14 @@ let arg name alt description completer: Arg<_> =
                     Complete (usage.Completer ""), remaining , [ usage]
                 | ValueNone -> Failure [$"Argument {usage.Name} value is missing"], remaining, [ usage ] 
             else
-                Success None, remaining @ tokens , [ usage ]
+                match pos with
+                | ValueSome pos ->
+                    Usage.complete usage "", remaining @ tokens , [ usage]
+                | _ ->
+                    Success None, remaining @ tokens , [ usage ]
         | [] ->
             match pos with
-            | ValueSome pos ->
+            | ValueSome _ ->
                 Usage.complete usage "" , remaining @ tokens, [usage]
             | ValueNone -> Success None, remaining  , [ usage ]
     fun pos tokens -> findArg pos tokens []
@@ -298,11 +294,11 @@ let map f (arg: Arg<_>) : Arg<_> =
 let optMap f arg = map (Option.map f) arg
 
 let defaultValue d (arg: _ Arg) : _ Arg =
-        fun pos token ->
-            match arg pos token with
+        fun pos tokens ->
+            match arg pos tokens with
             | Success None, rest, usage -> Success d, rest, usage
             | Success (Some v), rest, usage -> Success v, rest, usage
-            | Failure e, rest, usage -> Failure e, rest, usage
+            | Failure e, rest, usage -> Failure e, tokens, usage
             | Complete c, rest, usage -> Complete c, rest, usage
 
 let map2 f (argx: Arg<_>) (argy:Arg<_>) : Arg<_> =
@@ -387,35 +383,6 @@ module DateTime =
         | true, v -> Ok v
         | false, _ -> Error error
 
-// type Cmd = Mv | Del
-
-// type CmdArg =
-//     | Move of string  * int option * bool
-//     | Delete of string option
-
-// let cmd' = 
-//     cmd "move" "mv" "Move things" |> map (fun _ -> Mv)
-//     |> alt (cmd "delete" "del" "Delete things" |> map (fun _ -> Del)) 
-//     |> alt (error "Invalid command")
-
-
-// let both =
-//     cmdLine {
-//         match! cmd' with
-//         | Mv ->
-//             let! dst = arg "destintation" "d" "the command destination" |> defaultValue "default"
-//             and! groupId = arg "group" "g" "The group id" |> optParse (Int32.tryParse "Invalid group id")
-//             and! force = flag "force" "f" "force the command"
-//             return Move(dst, groupId, force)
-//         | Del ->
-
-//             let! thing = arg "thing" "t" "the thing" 
-//             return Delete(thing)
-
-//     }
-
-// tryParse both [ "mv"; "-g"; "x123";  "-f"]
-    
 let (<|>) x y = x |> alt y
 
 let tryParse (arg: Arg<_>) tokens =
@@ -437,29 +404,7 @@ let complete (arg: Arg<_>) (pos: int) tokens =
     match arg (ValueSome pos) tokens with
     | Complete choices, _,_ ->
         choices
-    | r, rest, usage -> failwith $"{(r,rest,usage)}"
-    // | _, rest, usage ->
-    //     match rest with
-    //     | [] ->
-    //         [ for cmd in usage do
-    //             cmd.Name
-    //             match cmd.Alt with
-    //             | Some alt -> alt
-    //             | None -> ()
-    //         ]
-    //     | x :: tail ->
-    //         match usage |> List.tryFind (fun u -> Usage.isMatch  u x ) with
-    //         | Some u ->
-    //             let next = List.tryHead tail |> Option.map (fun t -> t.Text)  |> Option.defaultValue ""
-    //             u.Completer next
-    //         | None ->
-    //             [ for cmd in usage do
-    //                 if cmd.Name.StartsWith(x.Text) then
-    //                     cmd.Name
-    //                 match cmd.Alt with
-    //                 | Some alt when alt.StartsWith(x.Text) -> alt
-    //                 | _ -> ()
-    //             ]
+    |  _,_,_ -> []
 let (|Int|_|) (input: string) =
     match Int32.TryParse(input, Globalization.CultureInfo.InvariantCulture ) with
     | true, v -> Some v
@@ -540,37 +485,3 @@ module Completer =
             if c.StartsWith(s) then
                 c
         ]
-
-// let pArg =
-//     cmdLine {
-//         match! cmd "build" null "build" <|> (cmd "publish" "pub" "publish") with
-//         | "build" -> 
-//             match! cmd "local" null "local" <|> (cmd "remote" null "remote") with
-//             | "local" ->
-//                 let! path = arg "path" "p"  "path" Completer.empty
-//                 and! config = arg "config" "c" "config" (Completer.choices ["release"; "debug"])
-//                 return Choice1Of3(path, config)
-//             | "remote" ->
-//                 let! path = arg "path" "p"  "path" Completer.empty
-//                 let! server = arg "server" "s"  "server" Completer.empty
-//                 and! config = arg "config" "c" "config" (Completer.choices ["release"; "debug"])
-//                 return Choice2Of3(path, server, config)
-//         | "publish" ->
-//             let! path = arg "path" "p"  "path" Completer.empty
-//             and! config = arg "config" "c" "config" (Completer.choices ["release"; "debug"])
-//             and! output = arg "output" "o"  "path" Completer.empty
-//             return Choice3Of3(path, config, output)
-//         | _ -> return failwithf "Nope"
-//     }
-
-// complete pArg 6 (Token.ofString "build r")
-// complete pArg 12 (Token.ofString "build local ")
-
-// let pPath = (arg "path" "p" "path" Completer.empty)
-// let pOut = arg "output" "o" "out" Completer.empty
-// let _, tks, u = 
-//     (map2 (fun x y -> x,y) pPath pOut) (ValueSome 1) (Token.ofString "-")
-
-// pPath (ValueSome 1) (Token.ofString "-")
-
-// Usage.isStop (ValueSome 1) u[0] tks[0]

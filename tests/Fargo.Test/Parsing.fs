@@ -558,7 +558,7 @@ module OptParse =
         parse p $"cmd -f --arg %d{value} -x"
         =! Success (Some value)
 
-    [<Property>]
+    [<Fact>]
     let ``optParse fail when value cannot be parsed`` () =
         let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
         parse p $"cmd -f --arg value -x"
@@ -581,7 +581,7 @@ module OptParse =
         rest p $"cmd -f --arg %10d{value} -x"
         =! "cmd -f                  -x"
 
-    [<Property>]
+    [<Fact>]
     let ``optParse don't consume token when parsing fails`` () =
         let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
         rest p $"cmd -f --arg value -x"
@@ -593,3 +593,250 @@ module OptParse =
         usage p $"cmd -f --arg %d{value} -x"
         =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |}]
 
+
+module DefaultValue =
+
+    [<Property>]
+    let ``defaultValue keep original value when it succeeds`` (value: int) (def: int) =
+        let p = arg "arg" "a" "description" Completer.empty |> defaultValue $"%d{def}"
+        parse p $"cmd -f --arg %d{value} -x"
+        =! Success $"%d{value}"
+
+    [<Property>]
+    let ``defaultValue fail when value cannot be parsed`` (value: int) (def: int) =
+        let p = arg "arg" "a" "description" Completer.empty |> defaultValue $"%d{def}"
+        parse p $"cmd -f -x"
+        =! Success $"%d{def}"
+
+    [<Fact>]
+    let ``defaultValue keeps failures`` () =
+        let p = arg "arg" "a" "description" Completer.empty |> defaultValue "default"
+        parse p $"cmd -f -x -a"
+        =! Failure [ "Argument --arg value is missing" ]
+
+    [<Property>]
+    let ``defaultValue keeps remaining tokens intact`` (value: int) =
+        let p = arg "arg" "a" "description" Completer.empty |> defaultValue "default"
+        rest p $"cmd -f --arg %10d{value} -x"
+        =! "cmd -f                  -x"
+
+    [<Property>]
+    let ``defaultValue don't consume token when parsing fails`` () =
+        let p = arg "arg" "a" "description" Completer.empty |> defaultValue "default"
+        rest p $"cmd -f -x -a"
+        =! "cmd -f -x -a"
+
+    [<Property>]
+    let ``defaultValue keeps usage intact`` (value: int) =
+        let p = arg "arg" "a" "description" Completer.empty |> defaultValue "default"
+        usage p $"cmd -f --arg %d{value} -x"
+        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |}]
+
+
+module Bind =
+    
+    [<Fact>]
+    let ``bind succeeds``() =
+        let p =
+            cmdLine {
+                let! c = cmd "cmd" null "desc"
+                let! s = cmd "sub" null "sub desc"
+                return c, s
+            }
+
+        parse p "cmd sub --arg x"
+        =! Success("cmd", "sub")
+
+    [<Fact>]
+    let ``bind fails if first fails``() =
+        let p =
+            cmdLine {
+                let! c = cmd "cmd" null "desc"
+                let! s = cmd "sub" null "sub desc"
+                return c, s
+            }
+
+        parse p "other sub --arg x"
+        =! Failure [ "Command cmd not found"]
+
+    [<Fact>]
+    let ``bind fails if second fails``() =
+        let p =
+            cmdLine {
+                let! c = cmd "cmd" null "desc"
+                let! s = cmd "sub" null "sub desc"
+                return c, s
+            }
+
+        parse p "cmd other --arg x"
+        =! Failure [ "Command sub not found"]
+
+    [<Fact>]
+    let ``bind consume both tokens``() =
+        let p =
+            cmdLine {
+                let! c = cmd "cmd" null "desc"
+                let! s = cmd "sub" null "sub desc"
+                return c, s
+            }
+
+        rest p "cmd sub --arg x"
+        =! "        --arg x"
+
+    [<Fact>]
+    let ``bind failing on first consumes no token``() =
+        let p =
+            cmdLine {
+                let! c = cmd "cmd" null "desc"
+                let! s = cmd "sub" null "sub desc"
+                return c, s
+            }
+
+        rest p "other sub --arg x"
+        =! "other sub --arg x"
+
+    [<Fact>]
+    let ``bind failing on second consumes first token``() =
+        let p =
+            cmdLine {
+                let! c = cmd "cmd" null "desc"
+                let! s = cmd "sub" null "sub desc"
+                return c, s
+            }
+
+        rest p "cmd other --arg x"
+        =! "    other --arg x"
+
+    [<Fact>]
+    let ``bind success returns last usage``() =
+        let p =
+            cmdLine {
+                let! c = cmd "cmd" null "desc"
+                let! s = cmd "sub" null "sub desc"
+                return c, s
+            }
+
+        usage p "cmd sub --arg x"
+        =! [ {| Name = "sub"; Alt = None; Description = "sub desc"|} ]
+
+    [<Fact>]
+    let ``bind failing on first returns first  usage``() =
+        let p =
+            cmdLine {
+                let! c = cmd "cmd" null "desc"
+                let! s = cmd "sub" null "sub desc"
+                return c, s
+            }
+
+        usage p "other sub --arg x"
+        =! [ {| Name = "cmd"; Alt = None; Description = "desc"|} ]
+
+    [<Fact>]
+    let ``bind failing on second returns second usage``() =
+        let p =
+            cmdLine {
+                let! c = cmd "cmd" null "desc"
+                let! s = cmd "sub" null "sub desc"
+                return c, s
+            }
+
+        usage p "cmd other --arg x"
+        =! [ {| Name = "sub"; Alt = None; Description = "sub desc"|} ]
+
+module Ret =
+    [<Property>]
+    let ``ret returns its value whatever the command line`` (cmdLine: string) (value: int) =
+        let p = ret value
+
+        parse p cmdLine
+        =! Success value
+
+module Alt =
+    [<Fact>]
+    let ``Alt succeed if first succeed``() =
+        let p = cmd "cmd1" null "desc cmd1"
+                <|> cmd "cmd2" null "desc cmd2"
+        
+        parse p "cmd1 --arg value"
+        =! Success "cmd1"
+
+    [<Fact>]
+    let ``Alt succeed if second succeed``() =
+        let p = cmd "cmd1" null "desc cmd1"
+                <|> cmd "cmd2" null "desc cmd2"
+        
+        parse p "cmd2 --arg value"
+        =! Success "cmd2"
+
+    [<Fact>]
+    let ``Alt fails if both fails``() =
+        let p = cmd "cmd1" null "desc cmd1"
+                <|> cmd "cmd2" null "desc cmd2"
+        
+        parse p "cmd3 --arg value"
+        =! Failure [ "Command cmd2 not found" ]
+
+    [<Fact>]
+    let ``Alt consumes succeeding token``() =
+        let p = cmd "cmd1" null "desc cmd1"
+                <|> cmd "command2" null "desc cmd2"
+        
+        rest p "cmd1 --arg value"
+        =! "     --arg value"
+
+    [<Fact>]
+    let ``Alt consumes succeeding token (second)``() =
+        let p = cmd "cmd1" null "desc cmd1"
+                <|> cmd "command2" null "desc cmd2"
+        
+        rest p "command2 --arg value"
+        =! "         --arg value"
+
+    [<Fact>]
+    let ``Alt keeps token intact when failing ``() =
+        let p = cmd "cmd1" null "desc cmd1"
+                <|> cmd "command2" null "desc cmd2"
+        
+        rest p "other --arg value"
+        =! "other --arg value"
+    
+    [<Fact>]
+    let ``Alt aggregates usages``() =
+        let p = cmd "cmd1" null "desc cmd1"
+                <|> cmd "command2" null "desc cmd2"
+        
+        usage p "cmd1 --arg value"
+        =! [ {| Name = "cmd1"; Alt = None; Description = "desc cmd1" |}
+             {| Name = "command2"; Alt = None; Description = "desc cmd2" |}]
+
+    [<Fact>]
+    let ``Alt alt aggregates usages (second)``() =
+        let p = cmd "cmd1" null "desc cmd1"
+                <|> cmd "command2" null "desc cmd2"
+        
+        usage p "command2 --arg value"
+        =! [ {| Name = "cmd1"; Alt = None; Description = "desc cmd1" |}
+             {| Name = "command2"; Alt = None; Description = "desc cmd2" |}]
+
+
+    [<Fact>]
+    let ``Aggregates usages when failing ``() =
+        let p = cmd "cmd1" null "desc cmd1"
+                <|> cmd "command2" null "desc cmd2"
+        
+        usage p "other --arg value"
+        =! [ {| Name = "cmd1"; Alt = None; Description = "desc cmd1" |}
+             {| Name = "command2"; Alt = None; Description = "desc cmd2" |}]
+
+module Error =
+    [<Property>]
+    let ``Error always fails``(cmdLine: string) =
+        let p = error "Nope"
+        parse p cmdLine
+        =! Failure ["Nope"]
+
+    [<Property>]
+    let ``Errorf always fails``(NonNull cmdLine) =
+        let p = errorf (fun tokens -> Token.toString tokens ) 
+        parse p cmdLine
+        =! Failure [ cmdLine.TrimEnd(' ')]
