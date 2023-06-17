@@ -265,7 +265,7 @@ let parse (f: 'a -> Result<'b, string>) (arg: Arg<'a>) : Arg<'b>  =
         | Success x, rest, usage ->
             match f x with
             | Ok v -> Success v, rest, usage
-            | Error e -> Failure [e], rest, usage
+            | Error e -> Failure [e], tokens, usage
         | Failure ex, rest, usage ->
             Failure ex, rest, usage
         | Complete c, rest, usage -> Complete c, rest, usage
@@ -276,7 +276,7 @@ let optParse (f: 'a -> Result<'b, string>) (arg: Arg<'a option>) : Arg<'b option
         | Success (Some x), rest, usage ->
             match f x with
             | Ok v -> Success (Some v), rest, usage
-            | Error e -> Failure [e], rest, usage
+            | Error e -> Failure [e], tokens, usage
         | Success None, rest, usage -> 
             Success None, rest, usage
         | Failure ex, rest, usage ->

@@ -1,4 +1,4 @@
-module Fargo.Parsing
+module Parsing
 open Fargo
 open Xunit
 open FsCheck
@@ -502,6 +502,94 @@ module OptMap =
     [<Property>]
     let ``optMap keeps usage intact`` (value: int) =
         let p = arg "arg" "a" "description" Completer.empty |> optMap int
+        usage p $"cmd -f --arg %d{value} -x"
+        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |}]
+
+module Parse =
+    let parseInt (input: string) = 
+        match System.Int32.TryParse(input, System.Globalization.CultureInfo.InvariantCulture) with
+        | true, v -> Ok v
+        | false, _ -> Error "Bad int!"
+    [<Property>]
+    let ``parse changes value when it succeeds`` (value: int) =
+        let p = req "arg" "a" "description" Completer.empty |> Fargo.parse parseInt
+        parse p $"cmd -f --arg %d{value} -x"
+        =! Success ( value)
+
+    [<Property>]
+    let ``parse fail when value cannot be parsed`` () =
+        let p = req "arg" "a" "description" Completer.empty |> Fargo.parse parseInt
+        parse p $"cmd -f --arg value -x"
+        =! Failure ["Bad int!"] 
+
+    [<Fact>]
+    let ``parse keeps failures`` () =
+        let p = req "arg" "a" "description" Completer.empty |> Fargo.parse parseInt
+        parse p $"cmd -f -x -a"
+        =! Failure [ "Argument --arg value is missing" ]
+
+    [<Property>]
+    let ``parse keeps remaining tokens intact`` (value: int) =
+        let p = req "arg" "a" "description" Completer.empty |> Fargo.parse parseInt
+        rest p $"cmd -f --arg %10d{value} -x"
+        =! "cmd -f                  -x"
+
+    [<Property>]
+    let ``parse don't consume token when parsing fails`` () =
+        let p = req "arg" "a" "description" Completer.empty |> Fargo.parse parseInt
+        rest p $"cmd -f --arg value -x"
+        =! "cmd -f --arg value -x"
+
+    [<Property>]
+    let ``parse keeps usage intact`` (value: int) =
+        let p = req "arg" "a" "description" Completer.empty |> Fargo.parse parseInt
+        usage p $"cmd -f --arg %d{value} -x"
+        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |}]
+
+
+module OptParse =
+    let parseInt (input: string) = 
+        match System.Int32.TryParse(input, System.Globalization.CultureInfo.InvariantCulture) with
+        | true, v -> Ok v
+        | false, _ -> Error "Bad int!"
+    [<Property>]
+    let ``optParse changes value when it succeeds`` (value: int) =
+        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        parse p $"cmd -f --arg %d{value} -x"
+        =! Success (Some value)
+
+    [<Property>]
+    let ``optParse fail when value cannot be parsed`` () =
+        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        parse p $"cmd -f --arg value -x"
+        =! Failure ["Bad int!"] 
+
+    [<Fact>]
+    let ``optParse return None when it doesn't match``() =
+        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        parse p $"cmd -f -x"
+        =! Success None
+    [<Fact>]
+    let ``optParse keeps failures`` () =
+        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        parse p $"cmd -f -x -a"
+        =! Failure [ "Argument --arg value is missing" ]
+
+    [<Property>]
+    let ``optParse keeps remaining tokens intact`` (value: int) =
+        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        rest p $"cmd -f --arg %10d{value} -x"
+        =! "cmd -f                  -x"
+
+    [<Property>]
+    let ``optParse don't consume token when parsing fails`` () =
+        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        rest p $"cmd -f --arg value -x"
+        =! "cmd -f --arg value -x"
+
+    [<Property>]
+    let ``optParse keeps usage intact`` (value: int) =
+        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
         usage p $"cmd -f --arg %d{value} -x"
         =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |}]
 

@@ -1,10 +1,9 @@
-﻿module Fargo.Token
+﻿module Token
 open Xunit
 open FsCheck
 open FsCheck.Xunit
 
 open Fargo
-open Fargo.Token
 
 
 
