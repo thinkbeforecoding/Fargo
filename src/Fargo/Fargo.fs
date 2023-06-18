@@ -153,11 +153,23 @@ module Usage =
                         alt
               | None -> () ]
 
+    let change f usages =
+        match usages with
+        | usage :: tail ->
+            { Name = usage.Name
+              Alt = usage.Alt
+              Description = f usage.Description 
+              Completer = usage.Completer }
+            :: tail
+        | _ -> usages
+
 module Alt =
     let ofString (name: string) =
         name
         |> Option.ofObj
         |> Option.map ((+) "-")
+
+
 
 
 let cmd name alt description: Arg<_> =
@@ -217,15 +229,23 @@ let arg name alt description completer: Arg<_> =
             | ValueNone -> Success None, remaining  , [ usage ]
     fun pos tokens -> findArg pos tokens []
 
-let req name alt description completer: Arg<_> =
-    let arg = arg name alt description completer
+let reqArg (arg: Arg<_>) : Arg<_> =
+    let reqUsage description = description + " (required)"
     fun pos tokens ->
-        match arg pos tokens with
-        | Success (Some v), rest, usage -> Success v, rest, usage
-        | Success None, rest, (usage :: _ as usages) -> Failure [$"Required argument {usage.Name} not found"], rest, usages
-        | Success None, _, _ -> failwith "Unexpected parsing error"
-        | Failure e, rest, usage -> Failure e, rest, usage
-        | Complete c, rest, usage -> Complete c, rest, usage
+        let result, rest, usages = arg pos tokens
+        let reqResult = 
+            match result with
+            | Success (Some v) -> Success v
+            | Success None ->
+                let name =
+                    usages
+                    |> List.tryHead
+                    |> Option.map (fun u -> u.Name)
+                    |> Option.defaultValue "unknown"
+                Failure [$"Required argument {name} not found"]
+            | Failure e -> Failure e
+            | Complete c -> Complete c
+        reqResult, rest, Usage.change reqUsage usages
 
 let flag name alt description =
     let usage = {Name = "--" + name; Alt = Alt.ofString alt; Description = description; Completer = fun _ -> [] }
@@ -245,15 +265,26 @@ let flag name alt description =
             | ValueNone -> Success false, remaining, [usage]
     fun pos tokens -> findFlag pos tokens []
 
-let reqFlag name alt description =
-    let f = flag name alt description
+let reqFlag (f: Arg<bool>) =
+    let reqUsage desc = desc + " (required)"
+
     fun pos tokens ->
-        match f pos tokens with
-        | Success true, rest, usage -> Success true, rest, usage
-        | Success false, rest, (usage::_ as usages)  -> Failure [ $"Required flag {usage.Name} not found"], rest, usages
-        | Success false, rest, [] -> failwith "Unexpected parsing error"
-        | Failure e, rest, usage -> Failure e, rest, usage
-        | Complete c, rest, usage -> Complete c, rest, usage
+        let result, rest, usages = f pos tokens
+
+        let reqResult =
+            match result with
+            | Success true -> Success true
+            | Success false ->
+                let name =
+                    usages
+                    |> List.tryHead
+                    |> Option.map (fun u -> u.Name)
+                    |> Option.defaultValue "unknown"
+                    
+                Failure [ $"Required flag {name} not found"]
+            | Failure e -> Failure e
+            | Complete c -> Complete c
+        reqResult, rest, Usage.change reqUsage usages
 
 let parse (f: 'a -> Result<'b, string>) (arg: Arg<'a>) : Arg<'b>  =
     fun pos tokens ->
@@ -370,20 +401,20 @@ let errorf fmsg : Arg<_> =
         let msg = fmsg tokens
         Failure [msg], tokens, [] 
 
-
+let cmdError arg =
+    errorf (function [] -> "Missing command"| token :: _ -> $"Unknown command {token.Text}") arg
 
 module Int32 =
     let tryParse error (input: string) =
-        match Int32.TryParse(input, Globalization.CultureInfo.InvariantCulture) with
+        match Int32.TryParse(input, Globalization.NumberStyles.Integer, Globalization.CultureInfo.InvariantCulture) with
         | true, v -> Ok v
         | false, _ -> Error error
 module DateTime =
     let tryParse error (input: string) =
-        match DateTime.TryParse(input, Globalization.CultureInfo.InvariantCulture) with
+        match DateTime.TryParse(input, Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.AssumeUniversal) with
         | true, v -> Ok v
         | false, _ -> Error error
 
-let (<|>) x y = x |> alt y
 
 let tryParse (arg: Arg<_>) tokens =
     let (|Help|_|) tokens = 
@@ -406,7 +437,7 @@ let complete (arg: Arg<_>) (pos: int) tokens =
         choices
     |  _,_,_ -> []
 let (|Int|_|) (input: string) =
-    match Int32.TryParse(input, Globalization.CultureInfo.InvariantCulture ) with
+    match Int32.TryParse(input, Globalization.NumberStyles.Integer, Globalization.CultureInfo.InvariantCulture) with
     | true, v -> Some v
     | false,_ -> None
 
@@ -478,6 +509,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
 
 
 module Completer =
+
     let empty (s: string) : string list = []
 
     let choices (cs: string list) (s: string) =
@@ -485,3 +517,7 @@ module Completer =
             if c.StartsWith(s) then
                 c
         ]
+
+module Opertators =
+    let (<|>) x y = x |> alt y
+    let (|>>) x v = x |> map (fun _ -> v) 

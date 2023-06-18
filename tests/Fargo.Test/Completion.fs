@@ -1,5 +1,7 @@
 module Fargo.Completion
 open Fargo
+open Fargo.Opertators 
+
 open Xunit
 open FsCheck
 open FsCheck.Xunit
