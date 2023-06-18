@@ -189,86 +189,53 @@ let cmd name alt description: Arg<_> =
         | _ ->
              Failure [$"Command {name} not found"], tokens, [usage]
 
+let rec private findArg usage complete pos tokens remaining =
+    match tokens with
+    | x :: ((y :: tail) as rest) ->
+        if Usage.isStop pos usage x then
+            Usage.complete usage x.Text , remaining @ tokens, [usage]
+        elif Usage.isMatch usage x  then
+            match pos with
+            | ValueSome pos ->
+                if pos <= y.End then
+                    Complete (complete y.Text), remaining @ tail, [usage]
+                else
+                    Success (Some y.Text), remaining @ tail, [usage]
+
+            | ValueNone -> Success (Some y.Text), remaining @ tail, [usage]
+        else
+            findArg usage complete pos rest (remaining @ [x])
+    | [x]  ->
+        if Usage.isStop pos usage x then
+            Usage.complete usage x.Text , remaining @ tokens, [usage]
+        elif Usage.isMatch usage x then
+            match pos with
+            | ValueSome pos ->
+                Complete (complete ""), remaining , [ usage]
+            | ValueNone -> Failure [$"Argument {usage.Name} value is missing"], remaining, [ usage ] 
+        else
+            match pos with
+            | ValueSome pos ->
+                Usage.complete usage "", remaining @ tokens , [ usage]
+            | _ ->
+                Success None, remaining @ tokens , [ usage ]
+    | [] ->
+        match pos with
+        | ValueSome _ ->
+            Usage.complete usage "" , remaining @ tokens, [usage]
+        | ValueNone -> Success None, remaining  , [ usage ]
+
+
 let arg name alt description: Arg<_> =
     let usage = { Name = "--" + name; Alt = Alt.ofString alt; Description = description}
-    let rec findArg pos tokens remaining =
-        match tokens with
-        | x :: ((y :: tail) as rest) ->
-            if Usage.isStop pos usage x then
-                Usage.complete usage x.Text , remaining @ tokens, [usage]
-            elif Usage.isMatch usage x  then
-                match pos with
-                | ValueSome pos ->
-                    if pos <= y.End then
-                        Complete [], remaining @ tail, [usage]
-                    else
-                        Success (Some y.Text), remaining @ tail, [usage]
-
-                | ValueNone -> Success (Some y.Text), remaining @ tail, [usage]
-            else
-                findArg pos rest (remaining @ [x])
-        | [x]  ->
-            if Usage.isStop pos usage x then
-                Usage.complete usage x.Text , remaining @ tokens, [usage]
-            elif Usage.isMatch usage x then
-                match pos with
-                | ValueSome pos ->
-                    Complete [], remaining , [ usage]
-                | ValueNone -> Failure [$"Argument {usage.Name} value is missing"], remaining, [ usage ] 
-            else
-                match pos with
-                | ValueSome pos ->
-                    Usage.complete usage "", remaining @ tokens , [ usage]
-                | _ ->
-                    Success None, remaining @ tokens , [ usage ]
-        | [] ->
-            match pos with
-            | ValueSome _ ->
-                Usage.complete usage "" , remaining @ tokens, [usage]
-            | ValueNone -> Success None, remaining  , [ usage ]
-    fun pos tokens -> findArg pos tokens []
+    fun pos tokens -> findArg usage (fun _ -> []) pos tokens []
 
 let completer complete (arg: Arg<_ option>) : Arg<_> =
     fun pos tokens ->
         let result, rest, usages = arg pos tokens
         match usages with
         | usage :: _ -> 
-            let rec findArg pos tokens remaining =
-                match tokens with
-                | x :: ((y :: tail) as rest) ->
-                    if Usage.isStop pos usage x then
-                        Usage.complete usage x.Text , remaining @ tokens, [usage]
-                    elif Usage.isMatch usage x  then
-                        match pos with
-                        | ValueSome pos ->
-                            if pos <= y.End then
-                                Complete (complete y.Text), remaining @ tail, [usage]
-                            else
-                                Success (Some y.Text), remaining @ tail, [usage]
-
-                        | ValueNone -> Success (Some y.Text), remaining @ tail, [usage]
-                    else
-                        findArg pos rest (remaining @ [x])
-                | [x]  ->
-                    if Usage.isStop pos usage x then
-                        Usage.complete usage x.Text , remaining @ tokens, [usage]
-                    elif Usage.isMatch usage x then
-                        match pos with
-                        | ValueSome pos ->
-                            Complete (complete ""), remaining , [ usage]
-                        | ValueNone -> Failure [$"Argument {usage.Name} value is missing"], remaining, [ usage ] 
-                    else
-                        match pos with
-                        | ValueSome pos ->
-                            Usage.complete usage "", remaining @ tokens , [ usage]
-                        | _ ->
-                            Success None, remaining @ tokens , [ usage ]
-                | [] ->
-                    match pos with
-                    | ValueSome _ ->
-                        Usage.complete usage "" , remaining @ tokens, [usage]
-                    | ValueNone -> Success None, remaining  , [ usage ]
-            findArg pos tokens []
+            findArg usage complete pos tokens []
         | _ -> result, tokens, usages
 
 

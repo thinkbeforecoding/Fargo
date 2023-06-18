@@ -1,8 +1,6 @@
 module Fargo.Parsing
 open Fargo
 open Fargo.Opertators 
-
-
 open Xunit
 open FsCheck
 open FsCheck.Xunit
@@ -539,7 +537,7 @@ module Parse =
 
     [<Property>]
     let ``parse don't consume token when parsing fails`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |>Fargo.parse parseInt
+        let p = arg "arg" "a" "description" |> reqArg |> Fargo.parse parseInt
         rest p $"cmd -f --arg value -x"
         =! "cmd -f --arg value -x"
 
