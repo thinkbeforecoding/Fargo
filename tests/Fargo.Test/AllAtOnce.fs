@@ -29,8 +29,8 @@ let parseVoice = function
 let voiceCompleter =
     Completer.choices [ "soft"; "standard"; "loud"; "funny" ]
 
-let pVolume = arg "volume" "vl" "the volume of the voice" Completer.empty |> optParse (Int32.tryParse "Invalid volume") 
-let pVoice = arg "voice" "vc" "the voice to use" voiceCompleter |> optParse parseVoice
+let pVolume = arg "volume" "vl" "the volume of the voice" |> optParse (Int32.tryParse "Invalid volume") 
+let pVoice = arg "voice" "vc" "the voice to use" |> completer voiceCompleter |> optParse parseVoice
 let p =
     cmdLine {
         match!
@@ -39,7 +39,7 @@ let p =
             <|> cmdError
             with
         | MainCmd.Say ->
-            let! text = arg "text" "t" "the text to say" Completer.empty |> reqArg
+            let! text = arg "text" "t" "the text to say" |> reqArg
             and! voice = pVoice
             and! volume = pVolume 
             and! reverse = flag "reverse" "r" "say words in reverse order"

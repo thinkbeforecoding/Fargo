@@ -19,9 +19,9 @@ let rest (arg: Arg<'t>) input =
     Token.toString tokens
 
 let usage (arg: Arg<'t>) input =
-    let _, _, usage = arg ValueNone (Token.ofString input)
-    [ for u in usage do
-        {| Name = u.Name; Alt = u.Alt; Description = u.Description |} ]
+    let _, _, usages = arg ValueNone (Token.ofString input)
+    usages
+    
 
 
 [<Fact>]
@@ -61,7 +61,7 @@ module Flag =
     let ``flag usage is returned``() =
         let f = flag "flag" "f" "description" 
         usage f "cmd --other-arg value --flag -x"
-        =! [ {| Name = "--flag"; Alt = Some "-f"; Description = "description" |} ]
+        =! [ { Name = "--flag"; Alt = Some "-f"; Description = "description" } ]
 
 module ReqFlag =
     [<Fact>]
@@ -98,13 +98,13 @@ module ReqFlag =
     let ``reqFlag usage is returned if it succeeds``() =
         let f = flag "flag" "f" "description" |> reqFlag
         usage f "cmd --other-arg value --flag -x"
-        =! [ {| Name = "--flag"; Alt = Some "-f"; Description = "description (required)" |} ]
+        =! [ { Name = "--flag"; Alt = Some "-f"; Description = "description (required)" } ]
 
     [<Fact>]
     let ``reqFlag usage is returned if it fails``() =
         let f = flag "flag" "f" "description" |> reqFlag
         usage f "cmd --other-arg value -x"
-        =! [ {| Name = "--flag"; Alt = Some "-f"; Description = "description (required)" |} ]
+        =! [ { Name = "--flag"; Alt = Some "-f"; Description = "description (required)" } ]
 
 module Cmd =
     [<Fact>]
@@ -147,136 +147,136 @@ module Cmd =
     let ``cmd usage is returned if it succeeds``() =
         let c = cmd "command" "cmd" "description" 
         usage c "cmd --other-arg value --flag -x"
-        =! [ {| Name = "command"; Alt = Some "cmd"; Description = "description" |} ]
+        =! [ { Name = "command"; Alt = Some "cmd"; Description = "description" } ]
 
     [<Fact>]
     let ``cmd usage is returned if it failse``() =
         let c = cmd "command" "cmd" "description" 
         usage c "something --other-arg value --flag -x"
-        =! [ {| Name = "command"; Alt = Some "cmd"; Description = "description" |} ]
+        =! [ { Name = "command"; Alt = Some "cmd"; Description = "description" } ]
 
 module Arg =
     [<Fact>]
     let ``arg name parsing succeeds``() =
-        let f = arg "arg" "a" "description" Completer.empty
+        let f = arg "arg" "a" "description"
         parse f "cmd --other-arg val --arg value -x"
         =! Success (Some "value")
 
     [<Fact>]
     let ``arg short name parsing succeeds``() =
-        let f =  arg "arg" "a" "description" Completer.empty
+        let f =  arg "arg" "a" "description"
         parse f "cmd --other-arg val -a value -x"
         =! Success (Some "value")
 
     [<Fact>]
     let ``arg and its value tokens are removed after matching``() =
-        let f =  arg "arg" "a" "description" Completer.empty
+        let f =  arg "arg" "a" "description"
         rest f "cmd --other-arg val --arg value -x"
         =!  "cmd --other-arg val             -x"
 
     [<Fact>]
     let ``arg token is removed after if matching only name``() =
-        let f =  arg "arg" "a" "description" Completer.empty
+        let f =  arg "arg" "a" "description"
         rest f "cmd --other-arg val -x --arg"
         =!  "cmd --other-arg val -x"
 
     [<Fact>]
     let ``arg doesn't change token if not matching``() =
-        let f = arg "arg" "a" "description" Completer.empty
+        let f = arg "arg" "a" "description"
         rest f "cmd --other-arg val -x"
         =! "cmd --other-arg val -x"
 
     [<Fact>]
     let ``Absence of arg succeeds with None``() =
-        let f =  arg "arg" "a" "description" Completer.empty
+        let f =  arg "arg" "a" "description"
         parse f "cmd --other-arg value -x"
         =! Success None
 
     [<Fact>]
     let ``arg without it's value fails``() =
-        let f =  arg "arg" "a" "description" Completer.empty
+        let f =  arg "arg" "a" "description"
         parse f "cmd --other-arg val --arg"
         =! Failure ["Argument --arg value is missing"]
 
 
     [<Fact>]
     let ``arg usage is returned if it succeeds``() =
-        let f =  arg "arg" "a" "description" Completer.empty
+        let f =  arg "arg" "a" "description"
         usage f "cmd --other-arg val --arg value -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |} ]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description" } ]
 
     [<Fact>]
     let ``arg usage is returned if absent``() =
-        let f =  arg "arg" "a" "description" Completer.empty
+        let f =  arg "arg" "a" "description"
         usage f "cmd --other-arg value -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |} ]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description" } ]
     
     [<Fact>]
     let ``arg usage is returned if only name``() =
-        let f =  arg "arg" "a" "description" Completer.empty
+        let f =  arg "arg" "a" "description"
         usage f "cmd --other-arg value -x --arg"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |} ]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description" } ]
 
 module ReqArg =
     [<Fact>]
     let ``req name parsing succeeds``() =
-        let f = arg "arg" "a" "description" Completer.empty |> reqArg
+        let f = arg "arg" "a" "description" |> reqArg
         parse f "cmd --other-arg val --arg value -x"
         =! Success ("value")
 
     [<Fact>]
     let ``req short name parsing succeeds``() =
-        let f =  arg "arg" "a" "description" Completer.empty |> reqArg
+        let f =  arg "arg" "a" "description" |> reqArg
         parse f "cmd --other-arg val -a value -x"
         =! Success ("value")
 
     [<Fact>]
     let ``req and its value tokens are removed after matching``() =
-        let f =  arg "arg" "a" "description" Completer.empty |> reqArg
+        let f =  arg "arg" "a" "description" |> reqArg
         rest f "cmd --other-arg val --arg value -x"
         =! "cmd --other-arg val             -x"
     
     [<Fact>]
     let ``req token is removed if matching only name``() =
-        let f = arg "arg" "a" "description" Completer.empty |> reqArg
+        let f = arg "arg" "a" "description" |> reqArg
         rest f "cmd --other-arg val -x --arg"
         =! "cmd --other-arg val -x"
 
     [<Fact>]
     let ``req doesn't change token if not matching``() =
-        let f = arg "arg" "a" "description" Completer.empty |> reqArg
+        let f = arg "arg" "a" "description" |> reqArg
         rest f "cmd --other-arg val -x"
         =! "cmd --other-arg val -x"
 
     [<Fact>]
     let ``Absence of req fails``() =
-        let f =  arg "arg" "a" "description" Completer.empty |> reqArg
+        let f =  arg "arg" "a" "description" |> reqArg
         parse f "cmd --other-arg value -x"
         =! Failure ["Required argument --arg not found"]
 
     [<Fact>]
     let ``req without it's value fails``() =
-        let f =  arg "arg" "a" "description" Completer.empty |> reqArg
+        let f =  arg "arg" "a" "description" |> reqArg
         parse f "cmd --other-arg val --arg"
         =! Failure ["Argument --arg value is missing"]
 
     [<Fact>]
     let ``req usage is returned if it succeeds``() =
-        let f =  arg "arg" "a" "description" Completer.empty |> reqArg
+        let f =  arg "arg" "a" "description" |> reqArg
         usage f "cmd --other-arg val --arg value -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description (required)" |} ]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description (required)" } ]
 
     [<Fact>]
     let ``req usage is returned if absent``() =
-        let f =  arg "arg" "a" "description" Completer.empty |> reqArg
+        let f =  arg "arg" "a" "description" |> reqArg
         usage f "cmd --other-arg value -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description (required)" |} ]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description (required)" } ]
     
     [<Fact>]
     let ``req usage is returned if only name``() =
-        let f =  arg "arg" "a" "description" Completer.empty |> reqArg
+        let f =  arg "arg" "a" "description" |> reqArg
         usage f "cmd --other-arg value -x --arg"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description (required)" |} ]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description (required)" } ]
 
 
 module Applicative =
@@ -284,7 +284,7 @@ module Applicative =
     let ``Applicative can succeed``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
@@ -296,7 +296,7 @@ module Applicative =
     let ``Applicative combine results``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
@@ -308,7 +308,7 @@ module Applicative =
     let ``Applicative combine results (other direction)``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
@@ -320,7 +320,7 @@ module Applicative =
     let ``Applicative remove tokens when it succeeds``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
@@ -332,7 +332,7 @@ module Applicative =
     let ``Applicative fails if first fails``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty  |> reqArg
+                let! a = arg "arg" "a" "description arg"  |> reqArg
                 and! f = flag "flag" "f" "description flag"  |> reqFlag
                 return a,f
             }
@@ -344,7 +344,7 @@ module Applicative =
     let ``Applicative fails if second fails``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty  |> reqArg
+                let! a = arg "arg" "a" "description arg"  |> reqArg
                 and! f = flag "flag" "f" "description flag" |> reqFlag
                 return a,f
             }
@@ -356,7 +356,7 @@ module Applicative =
     let ``Applicative combines failures if both fail``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty  |> reqArg
+                let! a = arg "arg" "a" "description arg"  |> reqArg
                 and! f = flag "flag" "f" "description flag" |> reqFlag
                 return a,f
             }
@@ -369,7 +369,7 @@ module Applicative =
     let ``Applicative remove matched tokens when first fails``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
@@ -381,7 +381,7 @@ module Applicative =
     let ``Applicative remove matched tokens when second fails``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
@@ -393,7 +393,7 @@ module Applicative =
     let ``Applicative leaves token intact when nothing matches``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
@@ -406,107 +406,107 @@ module Applicative =
     let ``Applicative combine usages when it succeeds``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
 
         usage p "cmd -f --other-arg val --arg value -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description arg" |}
-             {| Name = "--flag"; Alt = Some "-f"; Description = "description flag" |}]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description arg" }
+             { Name = "--flag"; Alt = Some "-f"; Description = "description flag" }]
 
     [<Fact>]
     let ``Applicative combine usages when first fails``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
 
         usage p "cmd -f --other-arg val -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description arg" |}
-             {| Name = "--flag"; Alt = Some "-f"; Description = "description flag" |}]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description arg" }
+             { Name = "--flag"; Alt = Some "-f"; Description = "description flag" }]
 
     [<Fact>]
     let ``Applicative combine usages when second fails``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
 
         usage p "cmd --other-arg val --arg value -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description arg" |}
-             {| Name = "--flag"; Alt = Some "-f"; Description = "description flag" |}] 
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description arg" }
+             { Name = "--flag"; Alt = Some "-f"; Description = "description flag" }] 
     
     [<Fact>]
     let ``Applicative combine usages when both fails``() =
         let p =
             cmdLine { 
-                let! a = arg "arg" "a" "description arg" Completer.empty 
+                let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
             }
 
         usage p "cmd --other-arg val -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description arg" |}
-             {| Name = "--flag"; Alt = Some "-f"; Description = "description flag" |}] 
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description arg" }
+             { Name = "--flag"; Alt = Some "-f"; Description = "description flag" }] 
 
 module Map =
     [<Property>]
     let ``map changes value when it succeeds`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |> map int 
+        let p = arg "arg" "a" "description" |> reqArg |> map int 
         parse p $"cmd -f --arg %d{value} -x"
         =! Success value
 
     [<Fact>]
     let ``map keeps failures`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |> map int
+        let p = arg "arg" "a" "description" |> reqArg |> map int
         parse p $"cmd -f -x"
         =! Failure [ "Required argument --arg not found" ]
 
     [<Property>]
     let ``map keeps remaining tokens intact`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |> map int
+        let p = arg "arg" "a" "description" |> reqArg |> map int
         rest p $"cmd -f --arg %10d{value} -x"
         =! "cmd -f                  -x"
 
     [<Property>]
     let ``map keeps usage intact`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |> map int
+        let p = arg "arg" "a" "description" |> reqArg |> map int
         usage p $"cmd -f --arg %d{value} -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description (required)" |}]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description (required)" }]
 
 module OptMap =
     [<Property>]
     let ``optMap changes value when it succeeds`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> optMap int
+        let p = arg "arg" "a" "description" |> optMap int
         parse p $"cmd -f --arg %d{value} -x"
         =! Success (Some value)
     [<Fact>]
     let ``optMap return None when it doesn't match``() =
-        let p = arg "arg" "a" "description" Completer.empty |> optMap int
+        let p = arg "arg" "a" "description" |> optMap int
         parse p $"cmd -f -x"
         =! Success None
     [<Fact>]
     let ``optMap keeps failures`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> optMap int
+        let p = arg "arg" "a" "description" |> optMap int
         parse p $"cmd -f -x -a"
         =! Failure [ "Argument --arg value is missing" ]
 
     [<Property>]
     let ``optMap keeps remaining tokens intact`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> optMap int
+        let p = arg "arg" "a" "description" |> optMap int
         rest p $"cmd -f --arg %10d{value} -x"
         =! "cmd -f                  -x"
 
     [<Property>]
     let ``optMap keeps usage intact`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> optMap int
+        let p = arg "arg" "a" "description" |> optMap int
         usage p $"cmd -f --arg %d{value} -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |}]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description" }]
 
 module Parse =
     let parseInt (input: string) = 
@@ -515,39 +515,39 @@ module Parse =
         | false, _ -> Error "Bad int!"
     [<Property>]
     let ``parse changes value when it succeeds`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |> Fargo.parse parseInt
+        let p = arg "arg" "a" "description" |> reqArg |> Fargo.parse parseInt
         parse p $"cmd -f --arg %d{value} -x"
         =! Success ( value)
 
     [<Property>]
     let ``parse fail when value cannot be parsed`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |> Fargo.parse parseInt
+        let p = arg "arg" "a" "description" |> reqArg |> Fargo.parse parseInt
         parse p $"cmd -f --arg value -x"
         =! Failure ["Bad int!"] 
 
     [<Fact>]
     let ``parse keeps failures`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |> Fargo.parse parseInt
+        let p = arg "arg" "a" "description" |> reqArg |> Fargo.parse parseInt
         parse p $"cmd -f -x -a"
         =! Failure [ "Argument --arg value is missing" ]
 
     [<Property>]
     let ``parse keeps remaining tokens intact`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |> Fargo.parse parseInt
+        let p = arg "arg" "a" "description" |> reqArg |> Fargo.parse parseInt
         rest p $"cmd -f --arg %10d{value} -x"
         =! "cmd -f                  -x"
 
     [<Property>]
     let ``parse don't consume token when parsing fails`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |> Fargo.parse parseInt
+        let p = arg "arg" "a" "description" Completer.empty |> reqArg |>Fargo.parse parseInt
         rest p $"cmd -f --arg value -x"
         =! "cmd -f --arg value -x"
 
     [<Property>]
     let ``parse keeps usage intact`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> reqArg |> Fargo.parse parseInt
+        let p = arg "arg" "a" "description" |> reqArg |> Fargo.parse parseInt
         usage p $"cmd -f --arg %d{value} -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description (required)" |}]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description (required)" }]
 
 
 module OptParse =
@@ -557,83 +557,83 @@ module OptParse =
         | false, _ -> Error "Bad int!"
     [<Property>]
     let ``optParse changes value when it succeeds`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        let p = arg "arg" "a" "description" |> optParse parseInt
         parse p $"cmd -f --arg %d{value} -x"
         =! Success (Some value)
 
     [<Fact>]
     let ``optParse fail when value cannot be parsed`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        let p = arg "arg" "a" "description" |> optParse parseInt
         parse p $"cmd -f --arg value -x"
         =! Failure ["Bad int!"] 
 
     [<Fact>]
     let ``optParse return None when it doesn't match``() =
-        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        let p = arg "arg" "a" "description" |> optParse parseInt
         parse p $"cmd -f -x"
         =! Success None
     [<Fact>]
     let ``optParse keeps failures`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        let p = arg "arg" "a" "description" |> optParse parseInt
         parse p $"cmd -f -x -a"
         =! Failure [ "Argument --arg value is missing" ]
 
     [<Property>]
     let ``optParse keeps remaining tokens intact`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        let p = arg "arg" "a" "description" |> optParse parseInt
         rest p $"cmd -f --arg %10d{value} -x"
         =! "cmd -f                  -x"
 
     [<Fact>]
     let ``optParse don't consume token when parsing fails`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        let p = arg "arg" "a" "description" |> optParse parseInt
         rest p $"cmd -f --arg value -x"
         =! "cmd -f --arg value -x"
 
     [<Property>]
     let ``optParse keeps usage intact`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> optParse parseInt
+        let p = arg "arg" "a" "description" |> optParse parseInt
         usage p $"cmd -f --arg %d{value} -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |}]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description" }]
 
 
 module DefaultValue =
 
     [<Property>]
     let ``defaultValue keep original value when it succeeds`` (value: int) (def: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> defaultValue $"%d{def}"
+        let p = arg "arg" "a" "description" |> defaultValue $"%d{def}"
         parse p $"cmd -f --arg %d{value} -x"
         =! Success $"%d{value}"
 
     [<Property>]
     let ``defaultValue fail when value cannot be parsed`` (value: int) (def: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> defaultValue $"%d{def}"
+        let p = arg "arg" "a" "description" |> defaultValue $"%d{def}"
         parse p $"cmd -f -x"
         =! Success $"%d{def}"
 
     [<Fact>]
     let ``defaultValue keeps failures`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> defaultValue "default"
+        let p = arg "arg" "a" "description" |> defaultValue "default"
         parse p $"cmd -f -x -a"
         =! Failure [ "Argument --arg value is missing" ]
 
     [<Property>]
     let ``defaultValue keeps remaining tokens intact`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> defaultValue "default"
+        let p = arg "arg" "a" "description" |> defaultValue "default"
         rest p $"cmd -f --arg %10d{value} -x"
         =! "cmd -f                  -x"
 
     [<Property>]
     let ``defaultValue don't consume token when parsing fails`` () =
-        let p = arg "arg" "a" "description" Completer.empty |> defaultValue "default"
+        let p = arg "arg" "a" "description" |> defaultValue "default"
         rest p $"cmd -f -x -a"
         =! "cmd -f -x -a"
 
     [<Property>]
     let ``defaultValue keeps usage intact`` (value: int) =
-        let p = arg "arg" "a" "description" Completer.empty |> defaultValue "default"
+        let p = arg "arg" "a" "description" |> defaultValue "default"
         usage p $"cmd -f --arg %d{value} -x"
-        =! [ {| Name = "--arg"; Alt = Some "-a"; Description = "description" |}]
+        =! [ { Name = "--arg"; Alt = Some "-a"; Description = "description" }]
 
 
 module Bind =
@@ -720,7 +720,7 @@ module Bind =
             }
 
         usage p "cmd sub --arg x"
-        =! [ {| Name = "sub"; Alt = None; Description = "sub desc"|} ]
+        =! [ { Name = "sub"; Alt = None; Description = "sub desc"} ]
 
     [<Fact>]
     let ``bind failing on first returns first  usage``() =
@@ -732,7 +732,7 @@ module Bind =
             }
 
         usage p "other sub --arg x"
-        =! [ {| Name = "cmd"; Alt = None; Description = "desc"|} ]
+        =! [ { Name = "cmd"; Alt = None; Description = "desc"} ]
 
     [<Fact>]
     let ``bind failing on second returns second usage``() =
@@ -744,7 +744,7 @@ module Bind =
             }
 
         usage p "cmd other --arg x"
-        =! [ {| Name = "sub"; Alt = None; Description = "sub desc"|} ]
+        =! [ { Name = "sub"; Alt = None; Description = "sub desc"} ]
 
 module Ret =
     [<Property>]
@@ -809,8 +809,8 @@ module Alt =
                 <|> cmd "command2" null "desc cmd2"
         
         usage p "cmd1 --arg value"
-        =! [ {| Name = "cmd1"; Alt = None; Description = "desc cmd1" |}
-             {| Name = "command2"; Alt = None; Description = "desc cmd2" |}]
+        =! [ { Name = "cmd1"; Alt = None; Description = "desc cmd1" }
+             { Name = "command2"; Alt = None; Description = "desc cmd2" }]
 
     [<Fact>]
     let ``Alt alt aggregates usages (second)``() =
@@ -818,8 +818,8 @@ module Alt =
                 <|> cmd "command2" null "desc cmd2"
         
         usage p "command2 --arg value"
-        =! [ {| Name = "cmd1"; Alt = None; Description = "desc cmd1" |}
-             {| Name = "command2"; Alt = None; Description = "desc cmd2" |}]
+        =! [ { Name = "cmd1"; Alt = None; Description = "desc cmd1" }
+             { Name = "command2"; Alt = None; Description = "desc cmd2" }]
 
 
     [<Fact>]
@@ -828,8 +828,8 @@ module Alt =
                 <|> cmd "command2" null "desc cmd2"
         
         usage p "other --arg value"
-        =! [ {| Name = "cmd1"; Alt = None; Description = "desc cmd1" |}
-             {| Name = "command2"; Alt = None; Description = "desc cmd2" |}]
+        =! [ { Name = "cmd1"; Alt = None; Description = "desc cmd1" }
+             { Name = "command2"; Alt = None; Description = "desc cmd2" }]
 
 module Error =
     [<Property>]

@@ -114,7 +114,7 @@ module Token =
         loop 0 (tokens |> List.sortBy (fun t -> t.Start))
 
 
-type Usage = { Name: string; Alt: string option; Description: string; Completer: string -> string list}
+type Usage = { Name: string; Alt: string option; Description: string}
 type Usages = Usage list
 type CommandLine = Token list
 
@@ -158,8 +158,7 @@ module Usage =
         | usage :: tail ->
             { Name = usage.Name
               Alt = usage.Alt
-              Description = f usage.Description 
-              Completer = usage.Completer }
+              Description = f usage.Description }
             :: tail
         | _ -> usages
 
@@ -173,7 +172,7 @@ module Alt =
 
 
 let cmd name alt description: Arg<_> =
-    let usage = { Name = name; Alt = Option.ofObj alt; Description = description; Completer = fun _ -> [] }
+    let usage = { Name = name; Alt = Option.ofObj alt; Description = description}
     fun pos tokens ->
         match tokens with
         | (Usage.IsPrefix pos usage & cmd) :: rest ->
@@ -190,8 +189,8 @@ let cmd name alt description: Arg<_> =
         | _ ->
              Failure [$"Command {name} not found"], tokens, [usage]
 
-let arg name alt description completer: Arg<_> =
-    let usage = { Name = "--" + name; Alt = Alt.ofString alt; Description = description; Completer = completer }
+let arg name alt description: Arg<_> =
+    let usage = { Name = "--" + name; Alt = Alt.ofString alt; Description = description}
     let rec findArg pos tokens remaining =
         match tokens with
         | x :: ((y :: tail) as rest) ->
@@ -201,7 +200,7 @@ let arg name alt description completer: Arg<_> =
                 match pos with
                 | ValueSome pos ->
                     if pos <= y.End then
-                        Complete (usage.Completer y.Text), remaining @ tail, [usage]
+                        Complete [], remaining @ tail, [usage]
                     else
                         Success (Some y.Text), remaining @ tail, [usage]
 
@@ -214,7 +213,7 @@ let arg name alt description completer: Arg<_> =
             elif Usage.isMatch usage x then
                 match pos with
                 | ValueSome pos ->
-                    Complete (usage.Completer ""), remaining , [ usage]
+                    Complete [], remaining , [ usage]
                 | ValueNone -> Failure [$"Argument {usage.Name} value is missing"], remaining, [ usage ] 
             else
                 match pos with
@@ -228,6 +227,50 @@ let arg name alt description completer: Arg<_> =
                 Usage.complete usage "" , remaining @ tokens, [usage]
             | ValueNone -> Success None, remaining  , [ usage ]
     fun pos tokens -> findArg pos tokens []
+
+let completer complete (arg: Arg<_ option>) : Arg<_> =
+    fun pos tokens ->
+        let result, rest, usages = arg pos tokens
+        match usages with
+        | usage :: _ -> 
+            let rec findArg pos tokens remaining =
+                match tokens with
+                | x :: ((y :: tail) as rest) ->
+                    if Usage.isStop pos usage x then
+                        Usage.complete usage x.Text , remaining @ tokens, [usage]
+                    elif Usage.isMatch usage x  then
+                        match pos with
+                        | ValueSome pos ->
+                            if pos <= y.End then
+                                Complete (complete y.Text), remaining @ tail, [usage]
+                            else
+                                Success (Some y.Text), remaining @ tail, [usage]
+
+                        | ValueNone -> Success (Some y.Text), remaining @ tail, [usage]
+                    else
+                        findArg pos rest (remaining @ [x])
+                | [x]  ->
+                    if Usage.isStop pos usage x then
+                        Usage.complete usage x.Text , remaining @ tokens, [usage]
+                    elif Usage.isMatch usage x then
+                        match pos with
+                        | ValueSome pos ->
+                            Complete (complete ""), remaining , [ usage]
+                        | ValueNone -> Failure [$"Argument {usage.Name} value is missing"], remaining, [ usage ] 
+                    else
+                        match pos with
+                        | ValueSome pos ->
+                            Usage.complete usage "", remaining @ tokens , [ usage]
+                        | _ ->
+                            Success None, remaining @ tokens , [ usage ]
+                | [] ->
+                    match pos with
+                    | ValueSome _ ->
+                        Usage.complete usage "" , remaining @ tokens, [usage]
+                    | ValueNone -> Success None, remaining  , [ usage ]
+            findArg pos tokens []
+        | _ -> result, tokens, usages
+
 
 let reqArg (arg: Arg<_>) : Arg<_> =
     let reqUsage description = description + " (required)"
@@ -248,7 +291,7 @@ let reqArg (arg: Arg<_>) : Arg<_> =
         reqResult, rest, Usage.change reqUsage usages
 
 let flag name alt description =
-    let usage = {Name = "--" + name; Alt = Alt.ofString alt; Description = description; Completer = fun _ -> [] }
+    let usage = {Name = "--" + name; Alt = Alt.ofString alt; Description = description}
     let rec findFlag pos tokens remaining =
         match tokens with
         | x :: rest ->
