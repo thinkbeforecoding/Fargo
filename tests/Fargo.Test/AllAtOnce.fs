@@ -63,6 +63,9 @@ let parse input =
     tryParse p (Token.ofString input)
     |> Result.mapError (fun (errs,usages) -> errs, [ for u in usages -> u.Name ])
 
+let complete pos input =
+    complete p pos (Token.ofString input)
+
 
 [<Fact>]
 let ``Empty input returns usage``() =
@@ -174,6 +177,20 @@ let ``--help return main usage``() =
     parse "--help"
     =! Error([], ["say";"voice"])
 
+[<Fact>]
+let ``completion on - returns all args``() =
+    complete 14 "voice select -"
+    =! [ "--voice"; "-vc"; "--volume"; "-vl"]
+
+[<Fact>]
+let ``completion after command returns all args``() =
+    complete 13 "voice select "
+    =! [ "--voice"; "-vc"; "--volume"; "-vl"]
+
+[<Fact>]
+let ``completion after voice arg returns voice names``() =
+    complete 21 "voice select --voice "
+    =! ["soft"; "standard"; "loud"; "funny"]
 
 
 

@@ -121,7 +121,7 @@ type CommandLine = Token list
 type ParseResult<'t> =
     | Success of 't
     | Failure of string list
-    | Complete of string list
+    | Complete of string list * important: bool
 
 
 
@@ -144,14 +144,14 @@ module Usage =
             None
 
     let complete usage input =
-        Complete
+        Complete (
             [ if usage.Name.StartsWith(input, StringComparison.InvariantCultureIgnoreCase) then
                 usage.Name
               match usage.Alt with
-              | Some alt ->
+               | Some alt ->
                     if alt.StartsWith(input, StringComparison.InvariantCultureIgnoreCase) then
-                        alt
-              | None -> () ]
+                            alt
+               | None -> () ], false)
 
     let change f usages =
         match usages with
@@ -198,7 +198,7 @@ let rec private findArg usage complete pos tokens remaining =
             match pos with
             | ValueSome pos ->
                 if pos <= y.End then
-                    Complete (complete y.Text), remaining @ tail, [usage]
+                    Complete (complete y.Text, true), remaining @ tail, [usage]
                 else
                     Success (Some y.Text), remaining @ tail, [usage]
 
@@ -211,7 +211,7 @@ let rec private findArg usage complete pos tokens remaining =
         elif Usage.isMatch usage x then
             match pos with
             | ValueSome pos ->
-                Complete (complete ""), remaining , [ usage]
+                Complete (complete "", true), remaining , [ usage]
             | ValueNone -> Failure [$"Argument {usage.Name} value is missing"], remaining, [ usage ] 
         else
             match pos with
@@ -254,7 +254,7 @@ let reqArg (arg: Arg<_>) : Arg<_> =
                     |> Option.defaultValue "unknown"
                 Failure [$"Required argument {name} not found"]
             | Failure e -> Failure e
-            | Complete c -> Complete c
+            | Complete (c,i) -> Complete (c,i)
         reqResult, rest, Usage.change reqUsage usages
 
 let flag name alt description =
@@ -293,7 +293,7 @@ let reqFlag (f: Arg<bool>) =
                     
                 Failure [ $"Required flag {name} not found"]
             | Failure e -> Failure e
-            | Complete c -> Complete c
+            | Complete (c,i) -> Complete (c,i)
         reqResult, rest, Usage.change reqUsage usages
 
 let parse (f: 'a -> Result<'b, string>) (arg: Arg<'a>) : Arg<'b>  =
@@ -305,7 +305,7 @@ let parse (f: 'a -> Result<'b, string>) (arg: Arg<'a>) : Arg<'b>  =
             | Error e -> Failure [e], tokens, usage
         | Failure ex, rest, usage ->
             Failure ex, rest, usage
-        | Complete c, rest, usage -> Complete c, rest, usage
+        | Complete (c,i), rest, usage -> Complete (c,i), rest, usage
 
 let optParse (f: 'a -> Result<'b, string>) (arg: Arg<'a option>) : Arg<'b option>  =
     fun pos tokens ->
@@ -318,8 +318,8 @@ let optParse (f: 'a -> Result<'b, string>) (arg: Arg<'a option>) : Arg<'b option
             Success None, rest, usage
         | Failure ex, rest, usage ->
             Failure ex, rest, usage
-        | Complete c, rest, usage ->
-            Complete c, rest, usage
+        | Complete (c,i), rest, usage ->
+            Complete (c,i), rest, usage
 
 
 
@@ -330,7 +330,7 @@ let map f (arg: Arg<_>) : Arg<_> =
         match arg pos tokens with
         | Success x, rest, usage-> Success (f x), rest, usage
         | Failure e, rest, usage -> Failure e, rest, usage 
-        | Complete c, rest, usage -> Complete c , rest, usage 
+        | Complete (c,i), rest, usage -> Complete (c,i) , rest, usage 
 
 let optMap f arg = map (Option.map f) arg
 
@@ -340,7 +340,7 @@ let defaultValue d (arg: _ Arg) : _ Arg =
             | Success None, rest, usage -> Success d, rest, usage
             | Success (Some v), rest, usage -> Success v, rest, usage
             | Failure e, rest, usage -> Failure e, tokens, usage
-            | Complete c, rest, usage -> Complete c, rest, usage
+            | Complete (c,i), rest, usage -> Complete (c,i), rest, usage
 
 let map2 f (argx: Arg<_>) (argy:Arg<_>) : Arg<_> =
         fun pos tokens ->
@@ -349,17 +349,24 @@ let map2 f (argx: Arg<_>) (argy:Arg<_>) : Arg<_> =
                 match argy pos restx with
                 | Success y, resty, usagey -> Success (f x y), resty, usagex @ usagey
                 | Failure ey, resty, usagey -> Failure ey, resty, usagex @ usagey
-                | Complete cy, resty, usagey -> Complete cy, resty, usagex @ usagey
+                | Complete (cy,iy), resty, usagey -> Complete (cy,iy), resty, usagex @ usagey
             | Failure ex, restx, usagex -> 
                 match argy pos restx with
                 | Success y, resty, usagey -> Failure ex, resty, usagex @ usagey
                 | Failure ey, resty, usagey -> Failure (ex@ey), resty, usagex @ usagey
-                | Complete cy, resty, usagey -> Complete cy, resty, usagex @ usagey
-            | Complete cx, restx, usagex ->
+                | Complete (cy,iy), resty, usagey -> Complete (cy,iy), resty, usagex @ usagey
+            | Complete (cx,ix), restx, usagex ->
                 match argy pos restx with
-                | Success y, resty, usagey -> Complete cx, restx, usagex @ usagey
-                | Failure ey, resty, usagey -> Complete cx, restx, usagex @ usagey
-                | Complete cy, resty, usagey -> Complete (cx @ cy), resty, usagex @ usagey
+                | Success y, resty, usagey -> Complete (cx,ix), restx, usagex @ usagey
+                | Failure ey, resty, usagey -> Complete (cx,ix), restx, usagex @ usagey
+                | Complete (cy,iy), resty, usagey -> 
+                    let (c,i) =
+                        match ix, iy with
+                        | false, false -> cx @ cy, false
+                        | true, true -> cx @ cy, true
+                        | true, false -> cx, true
+                        | false, true -> cy, true
+                    Complete (c,i), resty, usagex @ usagey
 
 let bind (f: 'a -> Arg<'b>) (x: Arg<'a>) : Arg<'b> =
     fun pos tokens ->
@@ -369,8 +376,8 @@ let bind (f: 'a -> Arg<'b>) (x: Arg<'a>) : Arg<'b> =
                 y, resty,  usagey
         | Failure ex, restx, usagex ->
             Failure ex, restx, usagex
-        | Complete c, restx, usagex ->
-            Complete c, restx, usagex
+        | Complete (c,i), restx, usagex ->
+            Complete (c,i), restx, usagex
 
 let ret x : Arg<_> =
     fun pos tokens ->
@@ -395,9 +402,16 @@ let cmdLine = CmdLineBuilder()
 let alt (argy: Arg<_>) (argx: Arg<_>) : Arg<_> =
     fun pos tokens ->
         match argx pos tokens, argy pos tokens with
-        | (Complete cx , restx, usagex), (Complete cy, _,_) -> Complete (cx @ cy) , restx, usagex
-        | (Complete cx , restx, usagex), _ -> Complete cx , restx, usagex
-        | _, (Complete cy , resty, usagey) -> Complete cy, resty, usagey
+        | (Complete (cx,ix) , restx, usagex), (Complete (cy,iy), _,_) -> 
+            let c,i =
+                match ix,iy with
+                | false, false -> cx @ cy, false
+                | true, true -> cx @ cy, true
+                | true, false -> cx, true
+                | false, true -> cy, true
+            Complete (c,i) , restx, usagex
+        | (Complete (cx,ix) , restx, usagex), _ -> Complete (cx,ix) , restx, usagex
+        | _, (Complete (cy,iy) , resty, usagey) -> Complete (cy,iy), resty, usagey
         | (Success x, restx, usagex), (_, _, usagey) -> Success x, restx, usagex@usagey
         | (_,_,usagex), (Success y, resty, usagey) -> Success y, resty, usagex@usagey
         | (Failure ex,_,usagex), (Failure ey, _, usagey) -> Failure (ey), tokens, usagex@usagey
@@ -443,7 +457,7 @@ let tryParse (arg: Arg<_>) tokens =
 let complete (arg: Arg<_>) (pos: int) tokens =
 
     match arg (ValueSome pos) tokens with
-    | Complete choices, _,_ ->
+    | Complete (choices,_), _,_ ->
         choices
     |  _,_,_ -> []
 let (|Int|_|) (input: string) =
