@@ -21,7 +21,7 @@ dotnet add package Fargo
 
 In a fsx script:
 ```fsharp
-#r "nuget: Fargo
+#r "nuget: Fargo"
 ```
 
 You can try it with this simple hello world. Create a hello project:
@@ -102,19 +102,21 @@ Now, type `hello` followed by a space, and press tab or Ctrl+Space. The argument
 Flags are declared using the `flag` function:
 
 ```fsharp
-flag "force" "f" "force the copy"
+flag "force" "f" "force the copy" // Arg<bool>
 ```
 
 this creates a `--force` flag with a `-f` shortcut.
 
 A flag creates an `Arg<bool>` with a value of `Success true` when specified and a value of `Success false` otherwise.
 
+When the second argument is `null` the flag has no short alternate version.
+
 ## ReqFlag
 
 A flag can be made mandatory by using the `reqFlag`function:
 
 ```fsharp
-flag "force" "f" "force the copy" |> reqFlag
+flag "force" "f" "force the copy" |> reqFlag // Arg<bool>
 ```
 
 It creates an `Arg<bool>` with a value of `Success true` when specified and a value of `Failure ["Required flag --force not found"]` otherwise
@@ -124,17 +126,19 @@ It creates an `Arg<bool>` with a value of `Success true` when specified and a va
 Arguments accept a value, and are optional by default:
 
 ```fsharp
-arg "value" "v" "the value"
+arg "value" "v" "the value" // Arg<string option>
 ```
 
 It creates an `Arg<string option>` with a value of `Success(Some "a value")` containing the value when specified, and `Success None` otherwise.
+
+When the second argument is `null` the flag has no short alternate version.
 
 ## ReqArg
 
 To make an argument required, use the `reqArg` function:
 
 ```fsharp
-arg "value" "v" "the value" |> reqArg
+arg "value" "v" "the value" |> reqArg |> Arg<string>
 ```
 
 It creates an `Arg<string>` with a value of `Success "a value"` containing the value when specified, and `Failure ["Require argument --value not found"]` otherwise.
@@ -190,7 +194,7 @@ optParse ('a -> Result<'b, string>) -> Arg<'a option> -> Arg<'b option>
 ```
 
 ```fsharp
-arg "value" "v" "the value" |> optParse tryParseInt
+arg "value" "v" "the value" |> optParse tryParseInt // Arg<int option>
 ```
 
 ### DefaultValue
@@ -204,7 +208,7 @@ defaultValue: 'a -> Arg<'a option> -> Arg<'a>
 ```fsharp
 arg "value" "v" "the value"
 |> optParse tryParseInt
-|> defaultValue 0
+|> defaultValue 0 // Arg<int>
 ```
 
 In this example, when the argument is not specified, the value will be 0. When specified, it will be an int if it can be correctly parsed, or return an error otherwise.
@@ -239,6 +243,7 @@ The specified function is used to combine the values of the two passed arguments
 map2 (fun firstName lastName -> firstName + " " + lastName)
      (arg "first-name" "f" "The user firstname" |> reqArg)
      (arg "last-name" "l" "The user last name" |> reqArg)
+     // Arg<string>
 ```
 
 Is is clearer to use the applicative computation expression `cmdLine` instead:
@@ -247,7 +252,7 @@ cmdLine {
     let! firstName = arg "first-name" "f" "The user firstname" |> reqArg
     and! lastName = arg "last-name" "l" "The user last name" |> reqArg
     return firstName + " " + lastName
-}    // type is Arg<string>
+}    // Arg<string>
 ```
 It is of course possible to combine values in different ways, especially in a tuple or a record, and to bind more values using `and!` :
 ```fsharp
@@ -263,8 +268,19 @@ cmdLine {
     return { FirstName = firstName
              LastName = lastName
              Age = age }
-}       // type is Arg<User>
+}   // Arg<User>
 ```
+
+### Cmd
+
+The `cmd` function create a command:
+```fsharp
+cmd "load" "ld" "Loads the document" // Arg<string>
+```
+Contrary to flags and args which can be matched at any position, a command is always matched in the first position. Its value is the name of the command itself. In the example above, the value will be `"load"` even if the alternate short version is used.
+
+When the second argument is `null`, the command has no short alternate version.
+
 ## Alternatives
 
 The `<|>` operator can be used to combine two parsers together. This is especially useful for commands:
@@ -272,6 +288,7 @@ The `<|>` operator can be used to combine two parsers together. This is especial
 ```fsharp
 (cmd "load" "ld" "loads the document")
 <|> (cmd "save" "sv" "saves the document")
+    // Arg<string>
 ```
 
 If the command on the left matches, its value is returned. Otherwise, the second command is tested.
@@ -285,7 +302,7 @@ type Cmd = Load | Save | Delete
 <|> (cmd "delete" "del" "deletes the document" |~> Delete)
 <|> (error "Invalid file command") 
 
-// the type is Arg<Cmd>
+// Arg<Cmd>
 ```
 
 Here, for each command the `|~>` operator is used to replace the original `string` value, which is the name of the command, with the supplied value.
@@ -316,11 +333,86 @@ cmdLine {
         let! path = arg "path" "p" "the path"
         and! force = flag "force" "f" "overwrite file"
         return Save(path, force)
-} // type is Arg<Command>
+} // Arg<Command>
 ```
 Using a `let!` (`match!` is a shortcut for a `let!` followed by a `match`) followed by another `let!` combine them as nested levels. If the match of the command fails, the usage will display commands from the alternative. If it succeeds, the usage will display the arguments of the returned cases.
 
+Since commands return their name, it is possible to match directly on it:
+
+```fsharp
+type Command =
+| Load of string
+| Save of string * bool
+cmdLine {
+    match! cmd "load" "ld" "loads the document"
+           <|> cmd "save" "sv" "saves the document" with
+    | "load" -> 
+        let! path = arg "path" "p" "the path"
+        return Load path
+    | "save" ->
+        let! path = arg "path" "p" "the path"
+        and! force = flag "force" "f" "overwrite file"
+        return Save(path, force)
+    | _ -> return error "Unknown command"
+} // Arg<Command>
+```
+
+To define a default command, just handle it in the default case:
+```fsharp
+type Command =
+| Load of string
+| Save of string * bool
+| Touch of string
+cmdLine {
+    match! cmd "load" "ld" "loads the document"
+           <|> cmd "save" "sv" "saves the document" with
+    | "load" -> 
+        let! path = arg "path" "p" "the path"
+        return Load path
+    | "save" ->
+        let! path = arg "path" "p" "the path"
+        and! force = flag "force" "f" "overwrite file"
+        return Save(path, force)
+    | _ ->
+        let! path = arg "path" "p" "the path"
+        return Touch path
+} // Arg<Command>
+```
+
 Using another nested level of `let!` or `match!` it is possible to create sub-commands. 
+
+## Ret
+
+The `ret` function can be used to return a constant value.
+It can also be used for default command:
+```fsharp
+type FileCmd = Load | Save | Touch
+type Command =
+| Load of string
+| Save of string * bool
+| Touch of string
+cmdLine {
+    match! (cmd "load" "ld" "loads the document" |~> FileCmd.Load)
+           <|> (cmd "save" "sv" "saves the document" |~> FileCmd.Save)
+           <|> (ret FileCmd.Touch)  with
+    | FileCmd.Load ->
+        let! path = arg "path" "p" "the path"
+        return Load path
+    | FileCmd.Load ->
+        let! path = arg "path" "p" "the path"
+        and! force = flag "force" "f" "overwrite file"
+        return Save(path, force)
+    | FileCmd.Touch ->
+        let! path = arg "path" "p" "the path"
+        return Touch path}
+    // Arg<Command>
+```
+
+or to give default value to optional arguments:
+
+```fsharp
+arg "value" "v" "the value" <|> optParse tryParseInt <|> ret 0 
+```
 
 ## Run
 
