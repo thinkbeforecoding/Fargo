@@ -322,8 +322,30 @@ let optParse (f: 'a -> Result<'b, string>) (arg: Arg<'a option>) : Arg<'b option
             Complete (c,i), rest, usage
 
 
+let listParse (f: 'a -> Result<'b, string>) (arg: Arg<'a list>) : Arg<'b list> =
+    fun pos tokens ->
+        match arg pos tokens with
+        | Success xs, rest, usage ->
+            let results = xs |> List.map f
+            let errors = results |> List.collect (function Error e -> [e] | _ -> [])
+            match errors with
+            | [] -> 
+                let values = results |> List.collect (function Ok v -> [v] | _ -> []) 
+                Success values, rest, usage
+            | _ -> 
+                Failure errors, tokens, usage
+        | Failure ex, rest, usage ->
+            Failure ex, rest, usage
+        | Complete (c,i), rest, usage ->
+            Complete (c,i), rest, usage
 
-
+let nonEmpty error (arg: Arg<'a list>) =
+    fun pos tokens ->
+        match arg pos tokens with
+        | Success [], rest, usage -> Failure [error], rest, usage
+        | Success v, rest, usage -> Success v, rest, usage
+        | Failure e, rest, usage -> Failure e, rest, usage 
+        | Complete (c,i), rest, usage -> Complete(c,i), rest, usage
 
 let map f (arg: Arg<_>) : Arg<_> =
     fun pos tokens ->
@@ -545,3 +567,24 @@ module Completer =
 module Opertators =
     let (<|>) x y = x |> alt y
     let (|>>) x v = x |> map (fun _ -> v) 
+
+module Pipe =
+    open System.IO
+    open FSharp.Core.CompilerServices
+    let pipe : Arg<string list> =
+        fun pos tokens -> 
+            match pos with
+            | ValueNone ->
+                let mutable values = ListCollector()
+                let mutable line = Console.In.ReadLine()
+                while line <> null do
+                    values.Add line
+                    line <- Console.In.ReadLine()
+                Success (values.Close()), tokens, []
+            | ValueSome _ -> Complete([],false), tokens, []
+
+    let orPipe (arg: Arg<string option>) : Arg<string list> =
+        arg |> reqArg |> map (fun x -> [x]) |> alt pipe
+        
+
+        
