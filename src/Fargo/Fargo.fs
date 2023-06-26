@@ -13,6 +13,8 @@ type Token =
       End: int
       Quotes: Quotes }
 
+type Completer = string -> string list
+
 module Token =
     open Microsoft.FSharp.Core.CompilerServices
     let rec private loop (input: string) (pos: int) (result: ListCollector<_> byref) =
@@ -131,14 +133,14 @@ module Usage =
     let isMatch usage token =
         token.Text = usage.Name ||  (match usage.Alt with Some alt -> token.Text = alt | _ -> false)
 
-    let isStop pos usage token =
+    let isStop pos token =
         match pos with
         | ValueSome pos ->
             pos >= token.Start && pos <= token.End
         | ValueNone -> false
     
-    let (|IsPrefix|_|) pos usage token =
-        if isStop pos usage token then
+    let (|IsPrefix|_|) pos token =
+        if isStop pos token then
             Some()
         else
             None
@@ -168,14 +170,11 @@ module Alt =
         |> Option.ofObj
         |> Option.map ((+) "-")
 
-
-
-
 let cmd name alt description: Arg<string> =
     let usage = { Name = name; Alt = Option.ofObj alt; Description = description}
     fun pos tokens ->
         match tokens with
-        | (Usage.IsPrefix pos usage & cmd) :: rest ->
+        | (Usage.IsPrefix pos & cmd) :: rest ->
             Usage.complete usage cmd.Text, tokens, [usage]
         | cmd :: tail when Usage.isMatch usage cmd ->
             Success name, tail, [usage]
@@ -192,7 +191,7 @@ let cmd name alt description: Arg<string> =
 let rec private findArg usage complete pos tokens remaining =
     match tokens with
     | x :: ((y :: tail) as rest) ->
-        if Usage.isStop pos usage x then
+        if Usage.isStop pos x then
             Usage.complete usage x.Text , remaining @ tokens, [usage]
         elif Usage.isMatch usage x  then
             match pos with
@@ -206,7 +205,7 @@ let rec private findArg usage complete pos tokens remaining =
         else
             findArg usage complete pos rest (remaining @ [x])
     | [x]  ->
-        if Usage.isStop pos usage x then
+        if Usage.isStop pos x then
             Usage.complete usage x.Text , remaining @ tokens, [usage]
         elif Usage.isMatch usage x then
             match pos with
@@ -225,12 +224,11 @@ let rec private findArg usage complete pos tokens remaining =
             Usage.complete usage "" , remaining @ tokens, [usage]
         | ValueNone -> Success None, remaining  , [ usage ]
 
-
 let arg name alt description: Arg<string option> =
     let usage = { Name = "--" + name; Alt = Alt.ofString alt; Description = description}
     fun pos tokens -> findArg usage (fun _ -> []) pos tokens []
 
-let completer complete (arg: Arg<_ option>) : Arg<_> =
+let completer complete (arg: Arg<string option>) : Arg<string option> =
     fun pos tokens ->
         let result, rest, usages = arg pos tokens
         match usages with
@@ -239,7 +237,7 @@ let completer complete (arg: Arg<_ option>) : Arg<_> =
         | _ -> result, tokens, usages
 
 
-let reqArg (arg: Arg<_>) : Arg<_> =
+let reqArg (arg: Arg<'a option>) : Arg<'a> =
     let reqUsage description = description + " (required)"
     fun pos tokens ->
         let result, rest, usages = arg pos tokens
@@ -262,7 +260,7 @@ let flag name alt description : Arg<bool> =
     let rec findFlag pos tokens remaining =
         match tokens with
         | x :: rest ->
-            if Usage.isStop pos usage x then
+            if Usage.isStop pos x then
                 Usage.complete usage x.Text, remaining @ tokens, [usage] 
             elif Usage.isMatch usage x  then
                 Success true, remaining @ rest, [usage]
@@ -438,31 +436,31 @@ let alt (argy: Arg<_>) (argx: Arg<_>) : Arg<_> =
         | (_,_,usagex), (Success y, resty, usagey) -> Success y, resty, usagex@usagey
         | (Failure ex,_,usagex), (Failure ey, _, usagey) -> Failure (ey), tokens, usagex@usagey
 
-let error msg : Arg<_> =
+let error message : Arg<_> =
     fun pos tokens ->
-        Failure [msg], tokens, [] 
+        Failure [message], tokens, [] 
 
-let errorf<'t> fmsg : Arg<'t> =
+let errorf<'t> messageFunc : Arg<'t> =
     fun pos tokens ->
-        let msg = fmsg tokens
+        let msg = messageFunc tokens
         Failure [msg], tokens, [] 
 
 let cmdError<'t> : Arg<'t> =
     errorf (function [] -> "Missing command"| token :: _ -> $"Unknown command %s{token.Text}")
 
 module Int32 =
-    let tryParse error (input: string) =
+    let tryParse (error: string) (input: string) =
         match Int32.TryParse(input, Globalization.NumberStyles.Integer, Globalization.CultureInfo.InvariantCulture) with
         | true, v -> Ok v
         | false, _ -> Error error
 module DateTime =
-    let tryParse error (input: string) =
+    let tryParse (error: string) (input: string) =
         match DateTime.TryParse(input, Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.AssumeUniversal) with
         | true, v -> Ok v
         | false, _ -> Error error
 
 
-let tryParse (arg: Arg<_>) tokens =
+let tryParse (arg: Arg<'a>) tokens =
     let (|Help|_|) tokens = 
         if List.exists (fun t -> t.Text = "--help") tokens then
             Some()
@@ -482,6 +480,7 @@ let complete (arg: Arg<_>) (pos: int) tokens =
     | Complete (choices,_), _,_ ->
         choices
     |  _,_,_ -> []
+
 let (|Int|_|) (input: string) =
     match Int32.TryParse(input, Globalization.NumberStyles.Integer, Globalization.CultureInfo.InvariantCulture) with
     | true, v -> Some v
@@ -528,7 +527,7 @@ let printErrors errs =
     for err in errs do
         eprintfn $"{Colors.red}{err}{Colors.def}"
 
-let printUsage usage =
+let printUsage (usage: Usage list) =
     printfn $"{Colors.yellow}Usage:" 
     for u in usage do
         let cmd =
@@ -537,6 +536,7 @@ let printUsage usage =
             | Some alt -> u.Name + ", " + alt
         printfn $"\t%-24s{cmd}%s{u.Description}"
     printfn $"{Colors.def}"
+
 
 
 let run appName arg (cmdLine: string[]) f =
@@ -565,7 +565,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
         0
     | args ->
         try 
-            match tryParse arg (Token.ofCmdLine cmdLine) with
+            match tryParse arg (Token.ofCmdLine args) with
             | Ok cmd ->
                 try
                     f cmd
@@ -585,11 +585,10 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
 
 
 module Completer =
-
     let empty (s: string) : string list = []
 
-    let choices (cs: string list) (s: string) =
-        [ for c in cs do
+    let choices (choices: string list) (s: string) =
+        [ for c in choices do
             if c.StartsWith(s) then
                 c
         ]
@@ -599,9 +598,9 @@ module Opertators =
     let (|>>) x v = x |> map (fun _ -> v) 
 
 module Pipe =
-    open System.IO
     open FSharp.Core.CompilerServices
-    let pipe : Arg<string list> =
+    
+    let stdIn : Arg<string list> =
         fun pos tokens -> 
             match pos with
             | ValueNone ->
@@ -616,8 +615,20 @@ module Pipe =
                     Success [], tokens, [] 
             | ValueSome _ -> Complete([],false), tokens, []
 
-    let orPipe (arg: Arg<string option>) : Arg<string list> =
-        arg |> reqArg |> map (fun x -> [x]) |> alt pipe
+    let orStdIn (arg: Arg<string option>) : Arg<string list> =
+        arg |> reqArg |> map (fun x -> [x]) |> alt stdIn
         
+module Env =
+    let envVar name : Arg<string option> =
+        fun pos tokens ->
+            match pos with
+            | ValueNone ->
+                match Environment.GetEnvironmentVariable(name) with
+                | null -> Success None, tokens, []
+                | value -> Success (Some value), tokens, []
+            | ValueSome _ -> Complete([], false), tokens, []
+                
+
+
 
         
