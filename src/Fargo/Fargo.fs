@@ -171,7 +171,7 @@ module Alt =
 
 
 
-let cmd name alt description: Arg<_> =
+let cmd name alt description: Arg<string> =
     let usage = { Name = name; Alt = Option.ofObj alt; Description = description}
     fun pos tokens ->
         match tokens with
@@ -184,10 +184,10 @@ let cmd name alt description: Arg<_> =
             | ValueSome _ -> 
                 Usage.complete usage "", tokens, [usage]
             | _ ->
-                Failure [$"Command {name} not found"], tokens, [usage]
+                Failure [$"Command %s{usage.Name} not found"], tokens, [usage]
             
         | _ ->
-             Failure [$"Command {name} not found"], tokens, [usage]
+             Failure [$"Command %s{usage.Name} not found"], tokens, [usage]
 
 let rec private findArg usage complete pos tokens remaining =
     match tokens with
@@ -212,7 +212,7 @@ let rec private findArg usage complete pos tokens remaining =
             match pos with
             | ValueSome pos ->
                 Complete (complete "", true), remaining , [ usage]
-            | ValueNone -> Failure [$"Argument {usage.Name} value is missing"], remaining, [ usage ] 
+            | ValueNone -> Failure [$"Argument %s{usage.Name} value is missing"], remaining, [ usage ] 
         else
             match pos with
             | ValueSome pos ->
@@ -226,7 +226,7 @@ let rec private findArg usage complete pos tokens remaining =
         | ValueNone -> Success None, remaining  , [ usage ]
 
 
-let arg name alt description: Arg<_> =
+let arg name alt description: Arg<string option> =
     let usage = { Name = "--" + name; Alt = Alt.ofString alt; Description = description}
     fun pos tokens -> findArg usage (fun _ -> []) pos tokens []
 
@@ -252,12 +252,12 @@ let reqArg (arg: Arg<_>) : Arg<_> =
                     |> List.tryHead
                     |> Option.map (fun u -> u.Name)
                     |> Option.defaultValue "unknown"
-                Failure [$"Required argument {name} not found"]
+                Failure [$"Required argument %s{name} not found"]
             | Failure e -> Failure e
             | Complete (c,i) -> Complete (c,i)
         reqResult, rest, Usage.change reqUsage usages
 
-let flag name alt description =
+let flag name alt description : Arg<bool> =
     let usage = {Name = "--" + name; Alt = Alt.ofString alt; Description = description}
     let rec findFlag pos tokens remaining =
         match tokens with
@@ -275,7 +275,7 @@ let flag name alt description =
             | ValueNone -> Success false, remaining, [usage]
     fun pos tokens -> findFlag pos tokens []
 
-let reqFlag (f: Arg<bool>) =
+let reqFlag (f: Arg<bool>) : Arg<bool> =
     let reqUsage desc = desc + " (required)"
 
     fun pos tokens ->
@@ -291,7 +291,7 @@ let reqFlag (f: Arg<bool>) =
                     |> Option.map (fun u -> u.Name)
                     |> Option.defaultValue "unknown"
                     
-                Failure [ $"Required flag {name} not found"]
+                Failure [ $"Required flag %s{name} not found"]
             | Failure e -> Failure e
             | Complete (c,i) -> Complete (c,i)
         reqResult, rest, Usage.change reqUsage usages
@@ -339,7 +339,7 @@ let listParse (f: 'a -> Result<'b, string>) (arg: Arg<'a list>) : Arg<'b list> =
         | Complete (c,i), rest, usage ->
             Complete (c,i), rest, usage
 
-let nonEmpty error (arg: Arg<'a list>) =
+let nonEmpty error (arg: Arg<'a list>) : Arg<'a list> =
     fun pos tokens ->
         match arg pos tokens with
         | Success [], rest, usage -> Failure [error], rest, usage
@@ -347,7 +347,7 @@ let nonEmpty error (arg: Arg<'a list>) =
         | Failure e, rest, usage -> Failure e, rest, usage 
         | Complete (c,i), rest, usage -> Complete(c,i), rest, usage
 
-let map f (arg: Arg<_>) : Arg<_> =
+let map (f: 'a -> 'b) (arg: Arg<'a>) : Arg<'b> =
     fun pos tokens ->
         match arg pos tokens with
         | Success x, rest, usage-> Success (f x), rest, usage
@@ -356,7 +356,7 @@ let map f (arg: Arg<_>) : Arg<_> =
 
 let optMap f arg = map (Option.map f) arg
 
-let defaultValue d (arg: _ Arg) : _ Arg =
+let defaultValue (d: 'a) (arg: Arg<'a option>) : Arg<'a> =
         fun pos tokens ->
             match arg pos tokens with
             | Success None, rest, usage -> Success d, rest, usage
@@ -364,7 +364,7 @@ let defaultValue d (arg: _ Arg) : _ Arg =
             | Failure e, rest, usage -> Failure e, tokens, usage
             | Complete (c,i), rest, usage -> Complete (c,i), rest, usage
 
-let map2 f (argx: Arg<_>) (argy:Arg<_>) : Arg<_> =
+let map2 (f: 'a -> 'b -> 'c) (argx: Arg<'a>) (argy:Arg<'b>) : Arg<'c> =
         fun pos tokens ->
             match argx pos tokens with
             | Success x, restx, usagex -> 
@@ -401,7 +401,7 @@ let bind (f: 'a -> Arg<'b>) (x: Arg<'a>) : Arg<'b> =
         | Complete (c,i), restx, usagex ->
             Complete (c,i), restx, usagex
 
-let ret x : Arg<_> =
+let ret (x: 'a) : Arg<'a> =
     fun pos tokens ->
         Success x, tokens, []
 
@@ -442,13 +442,13 @@ let error msg : Arg<_> =
     fun pos tokens ->
         Failure [msg], tokens, [] 
 
-let errorf fmsg : Arg<_> =
+let errorf<'t> fmsg : Arg<'t> =
     fun pos tokens ->
         let msg = fmsg tokens
         Failure [msg], tokens, [] 
 
-let cmdError arg =
-    errorf (function [] -> "Missing command"| token :: _ -> $"Unknown command {token.Text}") arg
+let cmdError<'t> : Arg<'t> =
+    errorf (function [] -> "Missing command"| token :: _ -> $"Unknown command %s{token.Text}")
 
 module Int32 =
     let tryParse error (input: string) =
@@ -472,7 +472,7 @@ let tryParse (arg: Arg<_>) tokens =
     match arg ValueNone tokens with
     | _, Help, usage -> Error([], usage)
     | Success x, [], _ -> Ok x
-    | Success _, cmd :: _, usage -> Error ([$"Unknown command line argument '{cmd}'"], usage)
+    | Success _, cmd :: _, usage -> Error ([$"Unknown command line argument '%s{cmd.Text}'"], usage)
     | Failure e, _, usage -> Error (e, usage)
     | Complete _, _, usage -> Error ([ "Unexpected completion" ], usage)
 
@@ -575,12 +575,15 @@ module Pipe =
         fun pos tokens -> 
             match pos with
             | ValueNone ->
-                let mutable values = ListCollector()
-                let mutable line = Console.In.ReadLine()
-                while line <> null do
-                    values.Add line
-                    line <- Console.In.ReadLine()
-                Success (values.Close()), tokens, []
+                if Console.IsInputRedirected then
+                    let mutable values = ListCollector()
+                    let mutable line = Console.In.ReadLine()
+                    while line <> null do
+                        values.Add(line)
+                        line <- Console.In.ReadLine()
+                    Success (values.Close()), tokens, []
+                else
+                    Success [], tokens, [] 
             | ValueSome _ -> Complete([],false), tokens, []
 
     let orPipe (arg: Arg<string option>) : Arg<string list> =

@@ -414,6 +414,22 @@ or to give default value to optional arguments:
 arg "value" "v" "the value" <|> optParse tryParseInt <|> ret 0 
 ```
 
+## Pipe / OrPipe
+
+It is possible to get values from standard input. The `Pipe.pipe` value is an `Arg<string list>` that returns lines read from the standard input. It fails if the input has not been redirected. If the pipe contains no value, it succeeds with an empty list. Use `nonEmpty` to ensure there is at list one element.
+
+To enable a parameter to be specified either directly or from the pipe, use the `Pipe.orPipe` function:
+
+```fsharp
+arg "value" "v" "the value"
+|> Pipe.orPipe
+|> nonEmpty "The required argument --value is missing"
+|> listParse (Int32.tryParse "Invalid value")
+// Arg<int list>
+```
+
+The argument returns a list of values, and fails if no value has been provided, either using the argument or the pipe.
+
 ## Run
 
 The `run` function runs a parser:
