@@ -4,7 +4,10 @@
     <TargetFramework>net6.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Fargo.fsi" />
+    <!-- <Compile Include="Fargo.fsi" /> -->
+    <Compile Include="Console.fs" />
+    <Compile Include="Token.fs" />
+    <Compile Include="Parsers.fs" />
     <Compile Include="Fargo.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />

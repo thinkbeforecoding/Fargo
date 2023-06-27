@@ -9,9 +9,10 @@ open Fargo
 
 let (=!) (actual:'a) (expected:'a) = Assert.Equal<'a>(expected, actual)
 
-let token text s e = { Text = text; Start = s; End = e; Quotes = NoQuotes} 
-let qtoken q text s e = { Text = text; Start = s; End = e; Quotes = Quotes q} 
-let sqtoken q text s e = { Text = text; Start = s; End = e; Quotes = StartQuote q} 
+
+let token text s e = { Text = text; Extent = {Start = s; End = e }; Quotes = NoQuotes} 
+let qtoken q text s e = { Text = text; Extent = {  Start = s; End = e}; Quotes = Quotes q} 
+let sqtoken q text s e = { Text = text; Extent = { Start = s; End = e}; Quotes = StartQuote q} 
 
 [<Fact>]
 let ``Token.ofList should produce correst Start and End``() = 

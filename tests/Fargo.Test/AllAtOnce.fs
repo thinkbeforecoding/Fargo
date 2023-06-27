@@ -29,7 +29,7 @@ let parseVoice = function
 let voiceCompleter =
     Completer.choices [ "soft"; "standard"; "loud"; "funny" ]
 
-let pVolume = arg "volume" "vl" "the volume of the voice" |> optParse (Int32.tryParse "Invalid volume") 
+let pVolume = arg "volume" "vl" "the volume of the voice" |> optParse (Parsers.Int32.tryParse >> Parsers.error "Invalid volume") 
 let pVoice = arg "voice" "vc" "the voice to use" |> completer voiceCompleter |> optParse parseVoice
 let p =
     cmdLine {
@@ -60,7 +60,7 @@ let (=!) (actual:'a) (expected:'a) = Assert.Equal<'a>(expected, actual)
 
 
 let parse input =
-    tryParse p (Token.ofString input)
+    tryParseTokens p (Token.ofString input)
     |> Result.mapError (fun (errs,usages) -> errs, [ for u in usages -> u.Name ])
 
 let complete pos input =
