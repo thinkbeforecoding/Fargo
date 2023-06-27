@@ -1,5 +1,5 @@
 source https://api.nuget.org/v3/index.json
-
+storage: None
 nuget FSharp.Core
 nuget FsCheck.Xunit 
 nuget Microsoft.NET.Test.Sdk

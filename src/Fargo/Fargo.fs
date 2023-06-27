@@ -436,6 +436,26 @@ let alt (argy: Arg<_>) (argx: Arg<_>) : Arg<_> =
         | (_,_,usagex), (Success y, resty, usagey) -> Success y, resty, usagex@usagey
         | (Failure ex,_,usagex), (Failure ey, _, usagey) -> Failure (ey), tokens, usagex@usagey
 
+let optAlt (argy: Arg<'a option>) (argx: Arg<'a option>) : Arg<'a option> =
+        fun pos tokens ->
+        match argx pos tokens, argy pos tokens with
+        | (Complete (cx,ix) , restx, usagex), (Complete (cy,iy), _,_) -> 
+            let c,i =
+                match ix,iy with
+                | false, false -> cx @ cy, false
+                | true, true -> cx @ cy, true
+                | true, false -> cx, true
+                | false, true -> cy, true
+            Complete (c,i) , restx, usagex
+        | (Complete (cx,ix) , restx, usagex), _ -> Complete (cx,ix) , restx, usagex
+        | _, (Complete (cy,iy) , resty, usagey) -> Complete (cy,iy), resty, usagey
+        | (Success (Some x), restx, usagex), (_, _, usagey) -> Success (Some x), restx, usagex@usagey
+        | (_,_,usagex), (Success (Some y), resty, usagey) -> Success (Some y), resty, usagex@usagey
+        | (Success None, rest,usagex), (_,_, usagey)
+        | (_, _, usagex), ( Success None, rest, usagey ) -> Success None, rest, usagex@usagey
+        | (Failure _,_,usagex), (Failure ey, _, usagey) -> Failure (ey), tokens, usagex@usagey
+
+
 let error message : Arg<_> =
     fun pos tokens ->
         Failure [message], tokens, [] 
@@ -595,6 +615,7 @@ module Completer =
 
 module Opertators =
     let (<|>) x y = x |> alt y
+    let (<|?>) x y = x |> optAlt y
     let (|>>) x v = x |> map (fun _ -> v) 
 
 module Pipe =

@@ -86,6 +86,7 @@ type CmdLineBuilder =
 val cmdLine: CmdLineBuilder
 
 val alt: Arg<'a> -> Arg<'a> -> Arg<'a>
+val optAlt: Arg<'a option> -> Arg<'a option> -> Arg<'a option>
 val error: message:string -> Arg<'a>
 val errorf<'a> : messageFunc:(Token list -> string) -> Arg<'a>
 
@@ -116,6 +117,7 @@ module Completer =
 
 module Opertators =
     val (<|>): Arg<'a> -> Arg<'a> -> Arg<'a>
+    val (<|?>): Arg<'a option> -> Arg<'a option> -> Arg<'a option>
     val (|>>): Arg<'a> -> 'b -> Arg<'b>
 
 module Pipe =
