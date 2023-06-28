@@ -99,7 +99,7 @@ module Bind =
     [<Fact>]
     let ``completion before bind should complete first one``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "cmd"
                 let! f = flag "flag" "f" "flag"
                 return c,f
@@ -110,7 +110,7 @@ module Bind =
     [<Fact>]
     let ``completion before anything should complete first one``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "cmd"
                 let! f = flag "flag" "f" "flag"
                 return c,f
@@ -121,7 +121,7 @@ module Bind =
     [<Fact>]
     let ``completion after matching first one should suggest second``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "cmd"
                 let! f = flag "flag" "f" "flag"
                 return c,f
@@ -132,7 +132,7 @@ module Bind =
     [<Fact>]
     let ``completion after failing first one return nothing``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "cmd"
                 let! f = flag "flag" "f" "flag"
                 return c,f
@@ -143,7 +143,7 @@ module Bind =
     [<Fact>]
     let ``completion after matching both returns nothing ``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "cmd"
                 let! f = flag "flag" "f" "flag"
                 return c,f
@@ -155,7 +155,7 @@ module Applicative =
     [<Fact>]
     let ``completion should suggest all if none is matched``() =
         let p =
-            cmdLine {
+            fargo {
                 let! a = arg "arg" "a" "arg"
                 and! f = flag "flag" "f" "flag"
                 return a,f
@@ -166,7 +166,7 @@ module Applicative =
     [<Fact>]
     let ``completion before anything should suggest all``() =
         let p =
-            cmdLine {
+            fargo {
                 let! a = arg "arg" "a" "arg"
                 and! f = flag "flag" "f" "flag"
                 return a,f
@@ -177,7 +177,7 @@ module Applicative =
     [<Fact>]
     let ``completion after matching first one should suggest second``() =
         let p =
-            cmdLine {
+            fargo {
                 let! a = arg "arg" "a" "arg"
                 and! f = flag "flag" "f" "flag"
                 return a,f
@@ -188,7 +188,7 @@ module Applicative =
     [<Fact>]
     let ``completion after matching second should suggest first one``() =
         let p =
-            cmdLine {
+            fargo {
                 let! a = arg "arg" "a" "arg"
                 and! f = flag "flag" "f" "flag"
                 return a,f
@@ -199,7 +199,7 @@ module Applicative =
     [<Fact>]
     let ``completion after matching both returns nothing ``() =
         let p =
-            cmdLine {
+            fargo {
                 let! a = arg "arg" "a" "arg"
                 and! f = flag "flag" "f" "flag"
                 return a,f

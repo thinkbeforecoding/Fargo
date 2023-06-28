@@ -32,7 +32,7 @@ let voiceCompleter =
 let pVolume = arg "volume" "vl" "the volume of the voice" |> optParse (Parsers.Int32.tryParse >> Parsers.error "Invalid volume") 
 let pVoice = arg "voice" "vc" "the voice to use" |> completer voiceCompleter |> optParse parseVoice
 let p =
-    cmdLine {
+    fargo {
         match!
             (cmd "say" null "Says specified text" |>> MainCmd.Say)
             <|> (cmd "voice" "vo" "Voice  commands" |>> MainCmd.Voice)

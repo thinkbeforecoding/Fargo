@@ -281,7 +281,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative can succeed``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -293,7 +293,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative combine results``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -305,7 +305,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative combine results (other direction)``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -317,7 +317,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative remove tokens when it succeeds``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -329,7 +329,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative fails if first fails``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg"  |> reqArg
                 and! f = flag "flag" "f" "description flag"  |> reqFlag
                 return a,f
@@ -341,7 +341,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative fails if second fails``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg"  |> reqArg
                 and! f = flag "flag" "f" "description flag" |> reqFlag
                 return a,f
@@ -353,7 +353,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative combines failures if both fail``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg"  |> reqArg
                 and! f = flag "flag" "f" "description flag" |> reqFlag
                 return a,f
@@ -366,7 +366,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative remove matched tokens when first fails``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -378,7 +378,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative remove matched tokens when second fails``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -390,7 +390,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative leaves token intact when nothing matches``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -403,7 +403,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative combine usages when it succeeds``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -416,7 +416,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative combine usages when first fails``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -429,7 +429,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative combine usages when second fails``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -442,7 +442,7 @@ module Applicative =
     [<Fact>]
     let ``Applicative combine usages when both fails``() =
         let p =
-            cmdLine { 
+            fargo { 
                 let! a = arg "arg" "a" "description arg" 
                 and! f = flag "flag" "f" "description flag" 
                 return a,f
@@ -639,7 +639,7 @@ module Bind =
     [<Fact>]
     let ``bind succeeds``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "desc"
                 let! s = cmd "sub" null "sub desc"
                 return c, s
@@ -651,7 +651,7 @@ module Bind =
     [<Fact>]
     let ``bind fails if first fails``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "desc"
                 let! s = cmd "sub" null "sub desc"
                 return c, s
@@ -663,7 +663,7 @@ module Bind =
     [<Fact>]
     let ``bind fails if second fails``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "desc"
                 let! s = cmd "sub" null "sub desc"
                 return c, s
@@ -675,7 +675,7 @@ module Bind =
     [<Fact>]
     let ``bind consume both tokens``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "desc"
                 let! s = cmd "sub" null "sub desc"
                 return c, s
@@ -687,7 +687,7 @@ module Bind =
     [<Fact>]
     let ``bind failing on first consumes no token``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "desc"
                 let! s = cmd "sub" null "sub desc"
                 return c, s
@@ -699,7 +699,7 @@ module Bind =
     [<Fact>]
     let ``bind failing on second consumes first token``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "desc"
                 let! s = cmd "sub" null "sub desc"
                 return c, s
@@ -711,7 +711,7 @@ module Bind =
     [<Fact>]
     let ``bind success returns last usage``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "desc"
                 let! s = cmd "sub" null "sub desc"
                 return c, s
@@ -723,7 +723,7 @@ module Bind =
     [<Fact>]
     let ``bind failing on first returns first  usage``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "desc"
                 let! s = cmd "sub" null "sub desc"
                 return c, s
@@ -735,7 +735,7 @@ module Bind =
     [<Fact>]
     let ``bind failing on second returns second usage``() =
         let p =
-            cmdLine {
+            fargo {
                 let! c = cmd "cmd" null "desc"
                 let! s = cmd "sub" null "sub desc"
                 return c, s
@@ -746,10 +746,10 @@ module Bind =
 
 module Ret =
     [<Property>]
-    let ``ret returns its value whatever the command line`` (cmdLine: string) (value: int) =
+    let ``ret returns its value whatever the command line`` (fargo: string) (value: int) =
         let p = ret value
 
-        parse p cmdLine
+        parse p fargo
         =! Success value
 
 module Alt =
@@ -831,13 +831,13 @@ module Alt =
 
 module Error =
     [<Property>]
-    let ``Error always fails``(cmdLine: string) =
+    let ``Error always fails``(fargo: string) =
         let p = error "Nope"
-        parse p cmdLine
+        parse p fargo
         =! Failure ["Nope"]
 
     [<Property>]
-    let ``Errorf always fails``(NonNull cmdLine) =
+    let ``Errorf always fails``(NonNull fargo) =
         let p = errorf (fun tokens -> Token.toString tokens ) 
-        parse p cmdLine
-        =! Failure [ cmdLine.TrimEnd(' ')]
+        parse p fargo
+        =! Failure [ fargo.TrimEnd(' ')]

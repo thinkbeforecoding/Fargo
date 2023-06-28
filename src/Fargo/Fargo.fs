@@ -295,7 +295,7 @@ module Fargo =
         fun pos tokens ->
             Success x, tokens, []
 
-    type CmdLineBuilder() =
+    type FargoBuilder() =
         member _.Bind(x,f) = bind f x
 
         member _.BindReturn(x : Arg<'a>,f: 'a -> 'b) : Arg<'b> = 
@@ -309,7 +309,7 @@ module Fargo =
 
         member _.Zero() = ret ()
 
-    let cmdLine = CmdLineBuilder()
+    let fargo = FargoBuilder()
 
     let alt (argy: Arg<_>) (argx: Arg<_>) : Arg<_> =
         fun pos tokens ->
