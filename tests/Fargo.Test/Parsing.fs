@@ -18,7 +18,7 @@ let rest (arg: Arg<'t>) input =
 
 let usage (arg: Arg<'t>) input =
     let _, _, usages = arg ValueNone (Token.ofString input)
-    usages
+    usages.Options
     
 
 

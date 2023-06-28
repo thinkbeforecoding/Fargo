@@ -1,4 +1,9 @@
-﻿namespace Fargo
+﻿#if !INTERACTIVE
+namespace Fargo
+#else
+#load "Token.fs" "Console.fs" "Parsers.fs"
+open Fargo
+#endif
 
 open System
 open Console
@@ -6,7 +11,9 @@ open Console
 type Completer = string -> string list
 
 type Usage = { Name: string; Alt: string option; Description: string}
-type Usages = Usage list
+type Usages =
+    { Path:  Usage list
+      Options: Usage list }
 type Tokens = Token list
 
 type ParseResult<'t> =
@@ -18,6 +25,10 @@ type ParseResult<'t> =
 
 type Arg<'a> = int voption -> Tokens -> ParseResult<'a> * Tokens * Usages
 
+module Usages =
+    let merge x y = { Path = x.Path @ y.Path; Options = x.Options @ y.Options}
+
+    let empty = {Path = []; Options = []}
 
 module Usage =
     let isMatch usage token =
@@ -45,12 +56,14 @@ module Usage =
                | None -> () ], false)
 
     let change f usages =
-        match usages with
+        match usages.Options with
         | usage :: tail ->
-            { Name = usage.Name
-              Alt = usage.Alt
-              Description = f usage.Description }
-            :: tail
+            { usages with
+                Options =
+                    { Name = usage.Name
+                      Alt = usage.Alt
+                      Description = f usage.Description }
+                    :: tail }
         | _ -> usages
 
     module Short =
@@ -63,69 +76,71 @@ module Usage =
 module Fargo =
     let cmd name alt description: Arg<string> =
         let usage = { Name = name; Alt = Option.ofObj alt; Description = description}
+        let usages = { Path = [ usage ]; Options = [usage]} 
         fun pos tokens ->
             match tokens with
             | (Usage.IsPrefix pos & cmd) :: rest ->
-                Usage.complete usage cmd.Text, tokens, [usage]
+                Usage.complete usage cmd.Text, tokens, usages
             | cmd :: tail when Usage.isMatch usage cmd ->
-                Success name, tail, [usage]
+                Success name, tail, usages
             | [] ->
                 match pos with
                 | ValueSome _ -> 
-                    Usage.complete usage "", tokens, [usage]
+                    Usage.complete usage "", tokens, usages
                 | _ ->
-                    Failure [$"Command %s{usage.Name} not found"], tokens, [usage]
+                    Failure [$"Command %s{usage.Name} not found"], tokens, usages
                 
             | _ ->
-                Failure [$"Command %s{usage.Name} not found"], tokens, [usage]
+                Failure [$"Command %s{usage.Name} not found"], tokens, usages
 
 
-    let rec private findArg usage complete pos tokens remaining =
+    let rec private findArg usage usages complete pos tokens remaining =
         match tokens with
         | x :: ((y :: tail) as rest) ->
             if Usage.isStop pos x then
-                Usage.complete usage x.Text , remaining @ tokens, [usage]
+                Usage.complete usage x.Text , remaining @ tokens, usages
             elif Usage.isMatch usage x  then
                 match pos with
                 | ValueSome pos ->
                     if pos <= y.Extent.End then
-                        Complete (complete y.Text, true), remaining @ tail, [usage]
+                        Complete (complete y.Text, true), remaining @ tail, usages
                     else
-                        Success (Some y.Text), remaining @ tail, [usage]
+                        Success (Some y.Text), remaining @ tail, usages
 
-                | ValueNone -> Success (Some y.Text), remaining @ tail, [usage]
+                | ValueNone -> Success (Some y.Text), remaining @ tail, usages
             else
-                findArg usage complete pos rest (remaining @ [x])
+                findArg usage usages complete pos rest (remaining @ [x])
         | [x]  ->
             if Usage.isStop pos x then
-                Usage.complete usage x.Text , remaining @ tokens, [usage]
+                Usage.complete usage x.Text , remaining @ tokens, usages
             elif Usage.isMatch usage x then
                 match pos with
                 | ValueSome pos ->
-                    Complete (complete "", true), remaining , [ usage]
-                | ValueNone -> Failure [$"Argument %s{usage.Name} value is missing"], remaining, [ usage ] 
+                    Complete (complete "", true), remaining , usages
+                | ValueNone -> Failure [$"Argument %s{usage.Name} value is missing"], remaining, usages
             else
                 match pos with
                 | ValueSome pos ->
-                    Usage.complete usage "", remaining @ tokens , [ usage]
+                    Usage.complete usage "", remaining @ tokens , usages
                 | _ ->
-                    Success None, remaining @ tokens , [ usage ]
+                    Success None, remaining @ tokens , usages
         | [] ->
             match pos with
             | ValueSome _ ->
-                Usage.complete usage "" , remaining @ tokens, [usage]
-            | ValueNone -> Success None, remaining  , [ usage ]
+                Usage.complete usage "" , remaining @ tokens, usages
+            | ValueNone -> Success None, remaining  , usages
 
     let arg name alt description: Arg<string option> =
         let usage = { Name = "--" + name; Alt = Usage.Short.ofString alt; Description = description}
-        fun pos tokens -> findArg usage (fun _ -> []) pos tokens []
+        let usages = { Path = []; Options = [usage]}
+        fun pos tokens -> findArg usage usages (fun _ -> []) pos tokens []
 
     let completer complete (arg: Arg<string option>) : Arg<string option> =
         fun pos tokens ->
             let result, rest, usages = arg pos tokens
-            match usages with
+            match usages.Options with
             | usage :: _ -> 
-                findArg usage complete pos tokens []
+                findArg usage usages complete pos tokens []
             | _ -> result, tokens, usages
 
 
@@ -138,7 +153,7 @@ module Fargo =
                 | Success (Some v) -> Success v
                 | Success None ->
                     let name =
-                        usages
+                        usages.Options
                         |> List.tryHead
                         |> Option.map (fun u -> u.Name)
                         |> Option.defaultValue "unknown"
@@ -149,20 +164,21 @@ module Fargo =
 
     let flag name alt description : Arg<bool> =
         let usage = {Name = "--" + name; Alt = Usage.Short.ofString alt; Description = description}
+        let usages = { Path = []; Options = [usage]} 
         let rec findFlag pos tokens remaining =
             match tokens with
             | x :: rest ->
                 if Usage.isStop pos x then
-                    Usage.complete usage x.Text, remaining @ tokens, [usage] 
+                    Usage.complete usage x.Text, remaining @ tokens, usages 
                 elif Usage.isMatch usage x  then
-                    Success true, remaining @ rest, [usage]
+                    Success true, remaining @ rest, usages
                 else
                     findFlag pos rest (remaining @ [x])
             | [] ->
                 match pos with
                 | ValueSome _ ->
-                    Usage.complete usage "" , remaining @ tokens, [usage]
-                | ValueNone -> Success false, remaining, [usage]
+                    Usage.complete usage "" , remaining @ tokens, usages
+                | ValueNone -> Success false, remaining, usages
         fun pos tokens -> findFlag pos tokens []
 
     let reqFlag (f: Arg<bool>) : Arg<bool> =
@@ -176,7 +192,7 @@ module Fargo =
                 | Success true -> Success true
                 | Success false ->
                     let name =
-                        usages
+                        usages.Options
                         |> List.tryHead
                         |> Option.map (fun u -> u.Name)
                         |> Option.defaultValue "unknown"
@@ -259,18 +275,18 @@ module Fargo =
                 match argx pos tokens with
                 | Success x, restx, usagex -> 
                     match argy pos restx with
-                    | Success y, resty, usagey -> Success (f x y), resty, usagex @ usagey
-                    | Failure ey, resty, usagey -> Failure ey, resty, usagex @ usagey
-                    | Complete (cy,iy), resty, usagey -> Complete (cy,iy), resty, usagex @ usagey
+                    | Success y, resty, usagey -> Success (f x y), resty, Usages.merge usagex usagey
+                    | Failure ey, resty, usagey -> Failure ey, resty, Usages.merge usagex usagey
+                    | Complete (cy,iy), resty, usagey -> Complete (cy,iy), resty, Usages.merge usagex usagey 
                 | Failure ex, restx, usagex -> 
                     match argy pos restx with
-                    | Success y, resty, usagey -> Failure ex, resty, usagex @ usagey
-                    | Failure ey, resty, usagey -> Failure (ex@ey), resty, usagex @ usagey
-                    | Complete (cy,iy), resty, usagey -> Complete (cy,iy), resty, usagex @ usagey
+                    | Success y, resty, usagey -> Failure ex, resty, Usages.merge usagex usagey
+                    | Failure ey, resty, usagey -> Failure (ex@ey), resty, Usages.merge usagex usagey
+                    | Complete (cy,iy), resty, usagey -> Complete (cy,iy), resty, Usages.merge usagex usagey
                 | Complete (cx,ix), restx, usagex ->
                     match argy pos restx with
-                    | Success y, resty, usagey -> Complete (cx,ix), restx, usagex @ usagey
-                    | Failure ey, resty, usagey -> Complete (cx,ix), restx, usagex @ usagey
+                    | Success y, resty, usagey -> Complete (cx,ix), restx, Usages.merge usagex usagey
+                    | Failure ey, resty, usagey -> Complete (cx,ix), restx, Usages.merge usagex usagey
                     | Complete (cy,iy), resty, usagey -> 
                         let (c,i) =
                             match ix, iy with
@@ -278,14 +294,14 @@ module Fargo =
                             | true, true -> cx @ cy, true
                             | true, false -> cx, true
                             | false, true -> cy, true
-                        Complete (c,i), resty, usagex @ usagey
+                        Complete (c,i), resty, Usages.merge usagex usagey
 
     let bind (f: 'a -> Arg<'b>) (x: Arg<'a>) : Arg<'b> =
         fun pos tokens ->
             match x pos tokens with
             | Success x, restx, usagex ->
                     let y, resty, usagey = f x pos restx
-                    y, resty,  usagey
+                    y, resty,  { Path = usagex.Path @ usagey.Path; Options = usagey.Options}
             | Failure ex, restx, usagex ->
                 Failure ex, restx, usagex
             | Complete (c,i), restx, usagex ->
@@ -293,7 +309,7 @@ module Fargo =
 
     let ret (x: 'a) : Arg<'a> =
         fun pos tokens ->
-            Success x, tokens, []
+            Success x, tokens, Usages.empty
 
     type FargoBuilder() =
         member _.Bind(x,f) = bind f x
@@ -324,9 +340,9 @@ module Fargo =
                 Complete (c,i) , restx, usagex
             | (Complete (cx,ix) , restx, usagex), _ -> Complete (cx,ix) , restx, usagex
             | _, (Complete (cy,iy) , resty, usagey) -> Complete (cy,iy), resty, usagey
-            | (Success x, restx, usagex), (_, _, usagey) -> Success x, restx, usagex@usagey
-            | (_,_,usagex), (Success y, resty, usagey) -> Success y, resty, usagex@usagey
-            | (Failure ex,_,usagex), (Failure ey, _, usagey) -> Failure (ey), tokens, usagex@usagey
+            | (Success x, restx, usagex), (_, _, usagey) -> Success x, restx, {  usagex with Options = usagex.Options @ usagey.Options }
+            | (_,_,usagex), (Success y, resty, usagey) -> Success y, resty, { usagey with Options = usagex.Options @ usagey.Options }
+            | (Failure ex,_,usagex), (Failure ey, _, usagey) -> Failure ey, tokens, {Path = []; Options = usagex.Options @ usagey.Options }
 
     let optAlt (argy: Arg<'a option>) (argx: Arg<'a option>) : Arg<'a option> =
             fun pos tokens ->
@@ -341,21 +357,21 @@ module Fargo =
                 Complete (c,i) , restx, usagex
             | (Complete (cx,ix) , restx, usagex), _ -> Complete (cx,ix) , restx, usagex
             | _, (Complete (cy,iy) , resty, usagey) -> Complete (cy,iy), resty, usagey
-            | (Success (Some x), restx, usagex), (_, _, usagey) -> Success (Some x), restx, usagex@usagey
-            | (_,_,usagex), (Success (Some y), resty, usagey) -> Success (Some y), resty, usagex@usagey
+            | (Success (Some x), restx, usagex), (_, _, usagey) -> Success (Some x), restx, {  usagex with Options = usagex.Options @ usagey.Options }
+            | (_,_,usagex), (Success (Some y), resty, usagey) -> Success (Some y), resty, {  usagey with Options = usagex.Options @ usagey.Options }
             | (Success None, rest,usagex), (_,_, usagey)
-            | (_, _, usagex), ( Success None, rest, usagey ) -> Success None, rest, usagex@usagey
-            | (Failure _,_,usagex), (Failure ey, _, usagey) -> Failure (ey), tokens, usagex@usagey
+            | (_, _, usagex), ( Success None, rest, usagey ) -> Success None, rest, Usages.merge usagex usagey
+            | (Failure _,_,usagex), (Failure ey, _, usagey) -> Failure (ey), tokens, Usages.merge usagex usagey
 
 
     let error message : Arg<_> =
         fun pos tokens ->
-            Failure [message], tokens, [] 
+            Failure [message], tokens, Usages.empty 
 
     let errorf<'t> messageFunc : Arg<'t> =
         fun pos tokens ->
             let msg = messageFunc tokens
-            Failure [msg], tokens, [] 
+            Failure [msg], tokens, Usages.empty
 
     let cmdError<'t> : Arg<'t> =
         errorf (function [] -> "Missing command"| token :: _ -> $"Unknown command %s{token.Text}")
@@ -390,15 +406,32 @@ module Fargo =
         for err in errs do
             eprintfn $"{Colors.red}{err}{Colors.def}"
 
-    let printUsage (usage: Usage list) =
-        printfn $"{Colors.yellow}Usage:" 
-        for u in usage do
-            let cmd =
-                match u.Alt with
-                | None -> u.Name
-                | Some alt -> u.Name + ", " + alt
-            printfn $"\t%-24s{cmd}%s{u.Description}"
+    let printUsage (usages: Usages) =
+        printf $"{Colors.yellow}Usage: "
+        for u in usages.Path do
+            printf $"{u.Name} "
+        match usages.Options with
+        | [] -> ()
+        | _ -> printfn "[options]"
         printfn $"{Colors.def}"
+
+
+    let printOptions (usages: Usage list) =
+        match usages with
+        | [] -> ()
+        | _ ->
+            printfn $"{Colors.yellow}Options:" 
+            for u in usages do
+                let cmd =
+                    match u.Alt with
+                    | None -> u.Name
+                    | Some alt -> u.Name + ", " + alt
+                printfn $"\t%-24s{cmd}%s{u.Description}"
+            printfn $"{Colors.def}"
+
+    let printHelp usages =
+        printUsage usages
+        printOptions usages.Options
 
     let private (|Int|_|) (input: string) =
         Parsers.Int32.tryParse input
@@ -440,7 +473,8 @@ module Fargo =
                     printfn "%s" appName
                     printErrors errs
                     printfn ""
-                    printUsage usage
+                    printHelp usage
+
                 0
             with
             | ex ->
@@ -475,10 +509,10 @@ module Pipe =
                     while line <> null do
                         values.Add(line)
                         line <- Console.In.ReadLine()
-                    Success (values.Close()), tokens, []
+                    Success (values.Close()), tokens, Usages.empty
                 else
-                    Success [], tokens, [] 
-            | ValueSome _ -> Complete([],false), tokens, []
+                    Success [], tokens, Usages.empty 
+            | ValueSome _ -> Complete([],false), tokens, Usages.empty
 
     let orStdIn (arg: Arg<string option>) : Arg<string list> =
         arg |> reqArg |> map (fun x -> [x]) |> alt stdIn
@@ -489,9 +523,9 @@ module Env =
             match pos with
             | ValueNone ->
                 match Environment.GetEnvironmentVariable(name) with
-                | null -> Success None, tokens, []
-                | value -> Success (Some value), tokens, []
-            | ValueSome _ -> Complete([], false), tokens, []
+                | null -> Success None, tokens, Usages.empty
+                | value -> Success (Some value), tokens, Usages.empty
+            | ValueSome _ -> Complete([], false), tokens, Usages.empty
                 
 
 

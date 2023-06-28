@@ -61,7 +61,7 @@ let (=!) (actual:'a) (expected:'a) = Assert.Equal<'a>(expected, actual)
 
 let parse input =
     tryParseTokens p (Token.ofString input)
-    |> Result.mapError (fun (errs,usages) -> errs, [ for u in usages -> u.Name ])
+    |> Result.mapError (fun (errs,usages) -> errs, [ for u in usages.Options -> u.Name ])
 
 let complete pos input =
     complete p pos (Token.ofString input)
