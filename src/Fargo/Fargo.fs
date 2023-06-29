@@ -10,7 +10,19 @@ open Console
 
 type Completer = string -> string list
 
-type Usage = { Name: string; Alt: string option; Description: string}
+[<Flags>]
+type UsageType =
+| None = 0
+| Arg = 1
+| Required = 2
+| Many = 4
+
+type Usage = { Name: string option; Alt: string option; Value: string option; Description: string; Type: UsageType}
+    with
+        member this.IsRequired = this.Type &&& UsageType.Required <> enum 0
+        member this.IsArg = this.Type &&& UsageType.Arg <> enum 0
+        member this.IsMany = this.Type &&& UsageType.Many <> enum 0
+
 type Usages =
     { Path:  Usage list
       Options: Usage list }
@@ -32,7 +44,7 @@ module Usages =
 
 module Usage =
     let isMatch usage token =
-        token.Text = usage.Name ||  (match usage.Alt with Some alt -> token.Text = alt | _ -> false)
+        (match usage.Name with Some name -> token.Text = name | _ -> false) ||  (match usage.Alt with Some alt -> token.Text = alt | _ -> false)
 
     let isStop pos token =
         match pos with
@@ -47,24 +59,27 @@ module Usage =
 
     let complete usage input =
         Complete (
-            [ if usage.Name.StartsWith(input, StringComparison.InvariantCultureIgnoreCase) then
-                usage.Name
+            [ match usage.Name with
+              | Some name ->
+                if name.StartsWith(input, StringComparison.InvariantCultureIgnoreCase) then
+                    name
+              | None -> ()
               match usage.Alt with
-               | Some alt ->
+              | Some alt ->
                     if alt.StartsWith(input, StringComparison.InvariantCultureIgnoreCase) then
                             alt
-               | None -> () ], false)
+              | None -> () ], false)
 
-    let change f usages =
+    let req usages =
         match usages.Options with
         | usage :: tail ->
             { usages with
                 Options =
-                    { Name = usage.Name
-                      Alt = usage.Alt
-                      Description = f usage.Description }
+                    { usage with
+                        Type = usage.Type ||| UsageType.Required }
                     :: tail }
         | _ -> usages
+
 
     module Short =
         let ofString (name: string) =
@@ -75,23 +90,21 @@ module Usage =
 [<AutoOpen>]
 module Fargo =
     let cmd name alt description: Arg<string> =
-        let usage = { Name = name; Alt = Option.ofObj alt; Description = description}
-        let usages = { Path = [ usage ]; Options = [usage]} 
+        let usage = { Name = Some name; Alt = Option.ofObj alt; Value = None; Description = description; Type = UsageType.Required }
+        let matchusages = { Path = [ usage ]; Options = [usage]} 
+        let failusages = { Path = []; Options = [usage]} 
+        let notFound = Failure [$"Command %s{name} not found"]
         fun pos tokens ->
             match tokens with
             | (Usage.IsPrefix pos & cmd) :: rest ->
-                Usage.complete usage cmd.Text, tokens, usages
+                Usage.complete usage cmd.Text, tokens, failusages
             | cmd :: tail when Usage.isMatch usage cmd ->
-                Success name, tail, usages
+                Success name, tail, matchusages
             | [] ->
                 match pos with
-                | ValueSome _ -> 
-                    Usage.complete usage "", tokens, usages
-                | _ ->
-                    Failure [$"Command %s{usage.Name} not found"], tokens, usages
-                
-            | _ ->
-                Failure [$"Command %s{usage.Name} not found"], tokens, usages
+                | ValueSome _ -> Usage.complete usage "", tokens, failusages
+                | _ -> notFound, tokens, failusages
+            | _ -> notFound, tokens, failusages
 
 
     let rec private findArg usage usages complete pos tokens remaining =
@@ -117,10 +130,12 @@ module Fargo =
                 match pos with
                 | ValueSome pos ->
                     Complete (complete "", true), remaining , usages
-                | ValueNone -> Failure [$"Argument %s{usage.Name} value is missing"], remaining, usages
+                | ValueNone ->
+                    let name = usage.Name |> Option.defaultValue "<Unknown>"
+                    Failure [$"Argument %s{name} value is missing"], remaining, usages
             else
                 match pos with
-                | ValueSome pos ->
+                | ValueSome _ ->
                     Usage.complete usage "", remaining @ tokens , usages
                 | _ ->
                     Success None, remaining @ tokens , usages
@@ -130,8 +145,13 @@ module Fargo =
                 Usage.complete usage "" , remaining @ tokens, usages
             | ValueNone -> Success None, remaining  , usages
 
-    let arg name alt description: Arg<string option> =
-        let usage = { Name = "--" + name; Alt = Usage.Short.ofString alt; Description = description}
+    let opt name alt value description: Arg<string option> =
+        let usage = { Name = Some ("--" + name); Alt = Usage.Short.ofString alt; Value = Some value; Description = description; Type = UsageType.Arg }
+        let usages = { Path = []; Options = [usage]}
+        fun pos tokens -> findArg usage usages (fun _ -> []) pos tokens []
+
+    let arg value description: Arg<string option> =
+        let usage = { Name = None; Alt = None; Value = Some value; Description = description; Type = UsageType.Arg}
         let usages = { Path = []; Options = [usage]}
         fun pos tokens -> findArg usage usages (fun _ -> []) pos tokens []
 
@@ -143,9 +163,7 @@ module Fargo =
                 findArg usage usages complete pos tokens []
             | _ -> result, tokens, usages
 
-
     let reqArg (arg: Arg<'a option>) : Arg<'a> =
-        let reqUsage description = description + " (required)"
         fun pos tokens ->
             let result, rest, usages = arg pos tokens
             let reqResult = 
@@ -155,15 +173,18 @@ module Fargo =
                     let name =
                         usages.Options
                         |> List.tryHead
-                        |> Option.map (fun u -> u.Name)
+                        |> Option.bind (fun u -> u.Name)
                         |> Option.defaultValue "unknown"
                     Failure [$"Required argument %s{name} not found"]
                 | Failure e -> Failure e
                 | Complete (c,i) -> Complete (c,i)
-            reqResult, rest, Usage.change reqUsage usages
+            reqResult, rest, Usage.req usages
+
+    let reqOpt (arg: Arg<'a option>) : Arg<'a> =
+        reqArg arg
 
     let flag name alt description : Arg<bool> =
-        let usage = {Name = "--" + name; Alt = Usage.Short.ofString alt; Description = description}
+        let usage = {Name = Some ("--" + name); Alt = Usage.Short.ofString alt; Value = None; Description = description; Type = UsageType.Arg}
         let usages = { Path = []; Options = [usage]} 
         let rec findFlag pos tokens remaining =
             match tokens with
@@ -182,8 +203,6 @@ module Fargo =
         fun pos tokens -> findFlag pos tokens []
 
     let reqFlag (f: Arg<bool>) : Arg<bool> =
-        let reqUsage desc = desc + " (required)"
-
         fun pos tokens ->
             let result, rest, usages = f pos tokens
 
@@ -194,13 +213,13 @@ module Fargo =
                     let name =
                         usages.Options
                         |> List.tryHead
-                        |> Option.map (fun u -> u.Name)
+                        |> Option.bind (fun u -> u.Name)
                         |> Option.defaultValue "unknown"
                         
                     Failure [ $"Required flag %s{name} not found"]
                 | Failure e -> Failure e
                 | Complete (c,i) -> Complete (c,i)
-            reqResult, rest, Usage.change reqUsage usages
+            reqResult, rest, Usage.req usages
 
     let parse (f: 'a -> Result<'b, string>) (arg: Arg<'a>) : Arg<'b>  =
         fun pos tokens ->
@@ -408,25 +427,118 @@ module Fargo =
 
     let printUsage (usages: Usages) =
         printf $"{Colors.yellow}Usage: "
-        for u in usages.Path do
-            printf $"{u.Name} "
-        match usages.Options with
-        | [] -> ()
-        | _ -> printfn "[options]"
+        
+        for c in usages.Path do
+            c.Name |> Option.defaultValue "unknown" |> printf "%s "
+        let cmds =
+            usages.Options
+            |> List.filter (fun u -> not u.IsArg)
+
+        let args =
+            usages.Options
+            |> List.filter (fun u -> u.Name = None || u.IsRequired)
+
+        let opts =
+            usages.Options
+            |> List.filter (fun u -> not (u.Name = None || u.IsRequired))
+
+        if cmds <> [] then printfn "[commands]"
+        if opts <> [] then printf "[options] "
+        for u in args do
+            if u.IsArg then
+                if not u.IsRequired then
+                    printf "["
+                String.concat " " [
+                    yield! u.Name |> Option.toList
+                    yield! u.Value |> Option.map (sprintf "<%s>") |> Option.toList
+                ] |> printf "%s"
+                if u.IsMany then
+                    printf "..."
+                 
+                if not u.IsRequired then
+                    printf "]"
+                printf " "
         printfn $"{Colors.def}"
 
 
     let printOptions (usages: Usage list) =
-        match usages with
+        let cmds =
+            usages
+            |> List.filter (fun u -> not u.IsArg)
+
+        let args =
+            usages
+            |> List.filter (fun u -> u.IsArg && u.IsRequired)
+
+        let opts =
+            usages
+            |> List.filter (fun u -> u.IsArg && not u.IsRequired)
+
+        match cmds with
+        | [] -> ()
+        | _ ->
+            printfn $"{Colors.yellow}Commands:"
+            for c in cmds do
+                match c.Name  with
+                | Some name ->
+                    let cmd =
+                        match c.Alt with
+                        | None -> name
+                        | Some alt -> name + ", " + alt
+                    printfn $"    %-24s{cmd}%s{c.Description}"
+                | None -> ()
+
+        match args with
+        | [] -> ()
+        | _ ->
+            printfn $"{Colors.yellow}Arguments:" 
+            for u in args do
+                match u.Name with
+                | Some name ->
+                    let cmd =
+                        let n =
+                            match u.Alt with
+                            | None -> name
+                            | Some alt -> name + ", " + alt
+                        let v =
+                            u.Value
+                            |> Option.map (sprintf " <%s> ")
+                            |> Option.defaultValue ""
+                        n+v
+                    printfn $"    %-24s{cmd}%s{u.Description}"
+                | None ->
+                    match u.Value with
+                    | Some v ->
+                        let value = $"<{v}>"
+                        printf $"    %-24s{ value }%s{u.Description}"
+                    | None -> ()
+            printfn $"{Colors.def}"
+
+
+        match opts with
         | [] -> ()
         | _ ->
             printfn $"{Colors.yellow}Options:" 
-            for u in usages do
-                let cmd =
-                    match u.Alt with
-                    | None -> u.Name
-                    | Some alt -> u.Name + ", " + alt
-                printfn $"\t%-24s{cmd}%s{u.Description}"
+            for u in opts do
+                match u.Name with
+                | Some name ->
+                    let cmd =
+                        let n =
+                            match u.Alt with
+                            | None -> name
+                            | Some alt -> name + ", " + alt
+                        let v =
+                            u.Value
+                            |> Option.map (sprintf " <%s> ")
+                            |> Option.defaultValue ""
+                        n+v
+                    printfn $"    %-24s{cmd}%s{u.Description}"
+                | None ->
+                    match u.Value with
+                    | Some v ->
+                        let value = $"<{v}>"
+                        printf $"    %-24s{ value }%s{u.Description}"
+                    | None -> ()
             printfn $"{Colors.def}"
 
     let printHelp usages =
@@ -515,7 +627,7 @@ module Pipe =
             | ValueSome _ -> Complete([],false), tokens, Usages.empty
 
     let orStdIn (arg: Arg<string option>) : Arg<string list> =
-        arg |> reqArg |> map (fun x -> [x]) |> alt stdIn
+        arg |> reqOpt |> map (fun x -> [x]) |> alt stdIn
         
 module Env =
     let envVar name : Arg<string option> =

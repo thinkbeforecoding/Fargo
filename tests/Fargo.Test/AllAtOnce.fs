@@ -29,8 +29,8 @@ let parseVoice = function
 let voiceCompleter =
     Completer.choices [ "soft"; "standard"; "loud"; "funny" ]
 
-let pVolume = arg "volume" "vl" "the volume of the voice" |> optParse (Parsers.Int32.tryParse >> Parsers.error "Invalid volume") 
-let pVoice = arg "voice" "vc" "the voice to use" |> completer voiceCompleter |> optParse parseVoice
+let pVolume = opt "volume" "vl" "0..100" "the volume of the voice" |> optParse (Parsers.Int32.tryParse >> Parsers.error "Invalid volume") 
+let pVoice = opt "voice" "vc" "soft|standard|loud|funny" "the voice to use" |> completer voiceCompleter |> optParse parseVoice
 let p =
     fargo {
         match!
@@ -39,7 +39,7 @@ let p =
             <|> cmdError
             with
         | MainCmd.Say ->
-            let! text = arg "text" "t" "the text to say" |> reqArg
+            let! text = opt "text" "t" "some text" "the text to say" |> reqOpt
             and! voice = pVoice
             and! volume = pVolume 
             and! reverse = flag "reverse" "r" "say words in reverse order"
@@ -51,7 +51,7 @@ let p =
             | VoiceCmd.List ->
                 return ListVoice
             | VoiceCmd.Select ->
-                let! voice = pVoice |> reqArg
+                let! voice = pVoice |> reqOpt
                 and! volume = pVolume
                 return SelectVoice(voice, volume)
     }
@@ -61,7 +61,7 @@ let (=!) (actual:'a) (expected:'a) = Assert.Equal<'a>(expected, actual)
 
 let parse input =
     tryParseTokens p (Token.ofString input)
-    |> Result.mapError (fun (errs,usages) -> errs, [ for u in usages.Options -> u.Name ])
+    |> Result.mapError (fun (errs,usages) -> errs, [ for u in usages.Options -> u.Name |> Option.defaultValue "" ])
 
 let complete pos input =
     complete p pos (Token.ofString input)
@@ -191,11 +191,3 @@ let ``completion after command returns all args``() =
 let ``completion after voice arg returns voice names``() =
     complete 21 "voice select --voice "
     =! ["soft"; "standard"; "loud"; "funny"]
-
-
-
-
-
-
-
-
