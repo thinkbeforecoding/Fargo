@@ -153,7 +153,14 @@ module Fargo =
     let arg value description: Arg<string option> =
         let usage = { Name = None; Alt = None; Value = Some value; Description = description; Type = UsageType.Arg}
         let usages = { Path = []; Options = [usage]}
-        fun pos tokens -> findArg usage usages (fun _ -> []) pos tokens []
+        fun pos tokens ->
+            match tokens with
+            | value :: tail ->
+                Success (Some value.Text), tail, usages
+            | [] ->
+                match pos with
+                | ValueSome _ -> Complete([],false), tokens, usages
+                | _ -> Success None, tokens, usages
 
     let completer complete (arg: Arg<string option>) : Arg<string option> =
         fun pos tokens ->
@@ -170,6 +177,23 @@ module Fargo =
                 match result with
                 | Success (Some v) -> Success v
                 | Success None ->
+                    let value =
+                        usages.Options
+                        |> List.tryHead
+                        |> Option.bind (fun u -> u.Value)
+                        |> Option.defaultValue "unknown"
+                    Failure [$"Required argument <%s{value}> not found"]
+                | Failure e -> Failure e
+                | Complete (c,i) -> Complete (c,i)
+            reqResult, rest, Usage.req usages
+
+    let reqOpt (arg: Arg<'a option>) : Arg<'a> =
+        fun pos tokens ->
+            let result, rest, usages = arg pos tokens
+            let reqResult = 
+                match result with
+                | Success (Some v) -> Success v
+                | Success None ->
                     let name =
                         usages.Options
                         |> List.tryHead
@@ -179,9 +203,6 @@ module Fargo =
                 | Failure e -> Failure e
                 | Complete (c,i) -> Complete (c,i)
             reqResult, rest, Usage.req usages
-
-    let reqOpt (arg: Arg<'a option>) : Arg<'a> =
-        reqArg arg
 
     let flag name alt description : Arg<bool> =
         let usage = {Name = Some ("--" + name); Alt = Usage.Short.ofString alt; Value = None; Description = description; Type = UsageType.Arg}
@@ -423,10 +444,10 @@ module Fargo =
 
     let printErrors errs =
         for err in errs do
-            eprintfn $"{Colors.red}{err}{Colors.def}"
+            eprintfn $"%s{Colors.red}%s{err}%s{Colors.def}"
 
     let printUsage (usages: Usages) =
-        printf $"{Colors.yellow}Usage: "
+        printf $"%s{Colors.yellow}Usage: "
         
         for c in usages.Path do
             c.Name |> Option.defaultValue "unknown" |> printf "%s "
@@ -442,7 +463,7 @@ module Fargo =
             usages.Options
             |> List.filter (fun u -> not (u.Name = None || u.IsRequired))
 
-        if cmds <> [] then printfn "[commands]"
+        if cmds <> [] then printfn "[command]"
         if opts <> [] then printf "[options] "
         for u in args do
             if u.IsArg then
@@ -458,7 +479,7 @@ module Fargo =
                 if not u.IsRequired then
                     printf "]"
                 printf " "
-        printfn $"{Colors.def}"
+        printfn $"%s{Colors.def}"
 
 
     let printOptions (usages: Usage list) =
@@ -477,7 +498,7 @@ module Fargo =
         match cmds with
         | [] -> ()
         | _ ->
-            printfn $"{Colors.yellow}Commands:"
+            printfn $"%s{Colors.yellow}Commands:"
             for c in cmds do
                 match c.Name  with
                 | Some name ->
@@ -491,7 +512,7 @@ module Fargo =
         match args with
         | [] -> ()
         | _ ->
-            printfn $"{Colors.yellow}Arguments:" 
+            printfn $"%s{Colors.yellow}Arguments:" 
             for u in args do
                 match u.Name with
                 | Some name ->
@@ -509,16 +530,16 @@ module Fargo =
                 | None ->
                     match u.Value with
                     | Some v ->
-                        let value = $"<{v}>"
-                        printf $"    %-24s{ value }%s{u.Description}"
+                        let value = $"<%s{v}>"
+                        printfn $"    %-24s{ value }%s{u.Description}"
                     | None -> ()
-            printfn $"{Colors.def}"
+            printfn $"%s{Colors.def}"
 
 
         match opts with
         | [] -> ()
         | _ ->
-            printfn $"{Colors.yellow}Options:" 
+            printfn $"%s{Colors.yellow}Options:" 
             for u in opts do
                 match u.Name with
                 | Some name ->
@@ -536,10 +557,10 @@ module Fargo =
                 | None ->
                     match u.Value with
                     | Some v ->
-                        let value = $"<{v}>"
+                        let value = $"<%s{v}>"
                         printf $"    %-24s{ value }%s{u.Description}"
                     | None -> ()
-            printfn $"{Colors.def}"
+            printfn $"%s{Colors.def}"
 
     let printHelp usages =
         printUsage usages
@@ -579,7 +600,7 @@ module Fargo =
                     try
                         f cmd
                     with
-                    | ex -> printErrors [ex]
+                    | ex -> printErrors [string ex]
 
                 | Error(errs, usage) ->
                     printfn "%s" appName

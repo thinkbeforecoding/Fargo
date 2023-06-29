@@ -71,7 +71,7 @@ Arguments:
 let ``cmd usage``() =
     let p = cmd "command" "cmd" "the value"
     outUsage p ""
-    =! $"""Usage: [commands]
+    =! $"""Usage: [command]
 Commands:
     command, cmd            the value"""
 
@@ -82,7 +82,7 @@ let ``cmd alt usage``() =
         <|> cmd "save" "sv" "save the file"
         <|> error "Nope"
     outUsage p ""
-    =! $"""Usage: [commands]
+    =! $"""Usage: [command]
 Commands:
     load, ld                load the file
     save, sv                save the file"""
@@ -127,7 +127,7 @@ let ``nest cmd alt usage after matching``() =
              }
         
     outUsage p "file "
-    =! $"""Usage: file [commands]
+    =! $"""Usage: file [command]
 Commands:
     load, ld                load the file
     save, sv                save the file"""

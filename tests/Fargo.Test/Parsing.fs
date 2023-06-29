@@ -153,7 +153,7 @@ module Cmd =
         usage c "something --other-arg value --flag -x"
         =! [ { Name = Some "command"; Alt = Some "cmd"; Value = None; Description = "description"; Type = UsageType.Required } ]
 
-module Arg =
+module Opt =
     [<Fact>]
     let ``arg name parsing succeeds``() =
         let f = opt "arg" "a" "value" "description"
@@ -276,7 +276,72 @@ module reqOpt =
         usage f "cmd --other-arg value -x --arg"
         =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg ||| UsageType.Required } ]
 
+module Arg =
+    [<Fact>]
+    let ``arg parsing succeeds``() =
+        let f = arg "value" "description"
+        parse f "value"
+        =! Success (Some "value")
 
+    [<Fact>]
+    let ``arg and its value tokens are removed after matching``() =
+        let f = arg "value" "description"
+        rest f "value"
+        =!  ""
+
+    [<Fact>]
+    let ``Absence of arg succeeds with None``() =
+        let f = arg "value" "description"
+        parse f "  "
+        =! Success None
+
+    [<Fact>]
+    let ``arg usage is returned if it succeeds``() =
+        let f = arg "value" "description"
+        usage f " value "
+        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Type = UsageType.Arg } ]
+
+    [<Fact>]
+    let ``arg usage is returned if absent``() =
+        let f = arg "value" "description"
+        usage f " "
+        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Type = UsageType.Arg } ]
+    
+
+module reqArg =
+    [<Fact>]
+    let ``req name parsing succeeds``() =
+        let f = arg  "value" "description" |> reqArg
+        parse f " value "
+        =! Success ("value")
+
+
+    [<Fact>]
+    let ``req and its value tokens are removed after matching``() =
+        let f = arg "value" "description" |> reqArg
+        rest f " value"
+        =! ""
+    
+
+
+    [<Fact>]
+    let ``Absence of req fails``() =
+        let f = arg "value" "description" |> reqArg
+        parse f " "
+        =! Failure ["Required argument <value> not found"]
+
+    [<Fact>]
+    let ``req usage is returned if it succeeds``() =
+        let f = arg "value" "description" |> reqArg
+        usage f " value "
+        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Type = UsageType.Arg ||| UsageType.Required } ]
+
+    [<Fact>]
+    let ``req usage is returned if absent``() =
+        let f = arg "value" "description" |> reqArg
+        usage f "cmd --other-arg value -x"
+        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Type = UsageType.Arg ||| UsageType.Required } ]
+    
 module Applicative =
     [<Fact>]
     let ``Applicative can succeed``() =
