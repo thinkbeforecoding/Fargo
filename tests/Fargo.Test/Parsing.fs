@@ -59,7 +59,7 @@ module Flag =
     let ``flag usage is returned``() =
         let f = flag "flag" "f" "description" 
         usage f "cmd --other-arg value --flag -x"
-        =! [ { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description"; Type = UsageType.Arg } ]
+        =! [ { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description"; Help = None; Type = UsageType.Arg } ]
 
 module ReqFlag =
     [<Fact>]
@@ -96,13 +96,13 @@ module ReqFlag =
     let ``reqFlag usage is returned if it succeeds``() =
         let f = flag "flag" "f" "description" |> reqFlag
         usage f "cmd --other-arg value --flag -x"
-        =! [ { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description"; Type = UsageType.Arg ||| UsageType.Required } ]
+        =! [ { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description"; Help = None; Type = UsageType.Arg ||| UsageType.Required } ]
 
     [<Fact>]
     let ``reqFlag usage is returned if it fails``() =
         let f = flag "flag" "f" "description" |> reqFlag
         usage f "cmd --other-arg value -x"
-        =! [ { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description"; Type = UsageType.Arg ||| UsageType.Required } ]
+        =! [ { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description"; Help = None; Type = UsageType.Arg ||| UsageType.Required } ]
 
 module Cmd =
     [<Fact>]
@@ -145,13 +145,13 @@ module Cmd =
     let ``cmd usage is returned if it succeeds``() =
         let c = cmd "command" "cmd" "description" 
         usage c "cmd --other-arg value --flag -x"
-        =! [ { Name = Some "command"; Alt = Some "cmd"; Value = None; Description = "description"; Type = UsageType.Required } ]
+        =! [ { Name = Some "command"; Alt = Some "cmd"; Value = None; Description = "description"; Help = None; Type = UsageType.Required } ]
 
     [<Fact>]
     let ``cmd usage is returned if it failse``() =
         let c = cmd "command" "cmd" "description" 
         usage c "something --other-arg value --flag -x"
-        =! [ { Name = Some "command"; Alt = Some "cmd"; Value = None; Description = "description"; Type = UsageType.Required } ]
+        =! [ { Name = Some "command"; Alt = Some "cmd"; Value = None; Description = "description"; Help = None; Type = UsageType.Required } ]
 
 module Opt =
     [<Fact>]
@@ -201,19 +201,19 @@ module Opt =
     let ``arg usage is returned if it succeeds``() =
         let f = opt "arg" "a" "value" "description"
         usage f "cmd --other-arg val --arg value -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg } ]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg } ]
 
     [<Fact>]
     let ``arg usage is returned if absent``() =
         let f = opt "arg" "a" "value" "description"
         usage f "cmd --other-arg value -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg } ]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg } ]
     
     [<Fact>]
     let ``arg usage is returned if only name``() =
         let f = opt "arg" "a" "value" "description"
         usage f "cmd --other-arg value -x --arg"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg } ]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg } ]
 
 module reqOpt =
     [<Fact>]
@@ -262,19 +262,19 @@ module reqOpt =
     let ``req usage is returned if it succeeds``() =
         let f = opt "arg" "a" "value" "description" |> reqOpt
         usage f "cmd --other-arg val --arg value -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg ||| UsageType.Required } ]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg ||| UsageType.Required } ]
 
     [<Fact>]
     let ``req usage is returned if absent``() =
         let f = opt "arg" "a" "value" "description" |> reqOpt
         usage f "cmd --other-arg value -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg ||| UsageType.Required } ]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg ||| UsageType.Required } ]
     
     [<Fact>]
     let ``req usage is returned if only name``() =
         let f = opt "arg" "a" "value" "description" |> reqOpt
         usage f "cmd --other-arg value -x --arg"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg ||| UsageType.Required } ]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg ||| UsageType.Required } ]
 
 module Arg =
     [<Fact>]
@@ -299,13 +299,13 @@ module Arg =
     let ``arg usage is returned if it succeeds``() =
         let f = arg "value" "description"
         usage f " value "
-        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Type = UsageType.Arg } ]
+        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg } ]
 
     [<Fact>]
     let ``arg usage is returned if absent``() =
         let f = arg "value" "description"
         usage f " "
-        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Type = UsageType.Arg } ]
+        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg } ]
     
 
 module reqArg =
@@ -334,13 +334,13 @@ module reqArg =
     let ``req usage is returned if it succeeds``() =
         let f = arg "value" "description" |> reqArg
         usage f " value "
-        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Type = UsageType.Arg ||| UsageType.Required } ]
+        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg ||| UsageType.Required } ]
 
     [<Fact>]
     let ``req usage is returned if absent``() =
         let f = arg "value" "description" |> reqArg
         usage f "cmd --other-arg value -x"
-        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Type = UsageType.Arg ||| UsageType.Required } ]
+        =! [ { Name = None; Alt = None; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg ||| UsageType.Required } ]
     
 module Applicative =
     [<Fact>]
@@ -475,8 +475,8 @@ module Applicative =
             }
 
         usage p "cmd -f --other-arg val --arg value -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description arg"; Type = UsageType.Arg }
-             { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description flag"; Type = UsageType.Arg }]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description arg"; Help = None; Type = UsageType.Arg }
+             { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description flag"; Help = None; Type = UsageType.Arg }]
 
     [<Fact>]
     let ``Applicative combine usages when first fails``() =
@@ -488,8 +488,8 @@ module Applicative =
             }
 
         usage p "cmd -f --other-arg val -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description arg"; Type = UsageType.Arg }
-             { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description flag"; Type = UsageType.Arg }]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description arg"; Help = None; Type = UsageType.Arg }
+             { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description flag"; Help = None; Type = UsageType.Arg }]
 
     [<Fact>]
     let ``Applicative combine usages when second fails``() =
@@ -501,8 +501,8 @@ module Applicative =
             }
 
         usage p "cmd --other-arg val --arg value -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description arg"; Type = UsageType.Arg }
-             { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description flag"; Type = UsageType.Arg }] 
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description arg"; Help = None; Type = UsageType.Arg }
+             { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description flag"; Help = None; Type = UsageType.Arg }] 
     
     [<Fact>]
     let ``Applicative combine usages when both fails``() =
@@ -514,8 +514,8 @@ module Applicative =
             }
 
         usage p "cmd --other-arg val -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description arg"; Type = UsageType.Arg }
-             { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description flag"; Type = UsageType.Arg }] 
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description arg"; Help = None; Type = UsageType.Arg }
+             { Name = Some "--flag"; Alt = Some "-f"; Value = None; Description = "description flag"; Help = None; Type = UsageType.Arg }] 
 
 module Map =
     [<Property>]
@@ -540,7 +540,7 @@ module Map =
     let ``map keeps usage intact`` (value: int) =
         let p = opt "arg" "a" "value" "description" |> reqOpt |> map int
         usage p $"cmd -f --arg %d{value} -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg ||| UsageType.Required }]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg ||| UsageType.Required }]
 
 module OptMap =
     [<Property>]
@@ -569,7 +569,7 @@ module OptMap =
     let ``optMap keeps usage intact`` (value: int) =
         let p = opt "arg" "a" "value" "description" |> optMap int
         usage p $"cmd -f --arg %d{value} -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg }]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg }]
 
 module Parse =
     let parseInt (input: string) = 
@@ -610,7 +610,7 @@ module Parse =
     let ``parse keeps usage intact`` (value: int) =
         let p = opt "arg" "a" "value" "description" |> reqOpt |> Fargo.parse parseInt
         usage p $"cmd -f --arg %d{value} -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg ||| UsageType.Required }]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg ||| UsageType.Required }]
 
 
 module OptParse =
@@ -657,7 +657,7 @@ module OptParse =
     let ``optParse keeps usage intact`` (value: int) =
         let p = opt "arg" "a" "value" "description" |> optParse parseInt
         usage p $"cmd -f --arg %d{value} -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg }]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg }]
 
 
 module DefaultValue =
@@ -696,7 +696,7 @@ module DefaultValue =
     let ``defaultValue keeps usage intact`` (value: int) =
         let p = opt "arg" "a" "value" "description" |> defaultValue "default"
         usage p $"cmd -f --arg %d{value} -x"
-        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Type = UsageType.Arg }]
+        =! [ { Name = Some "--arg"; Alt = Some "-a"; Value = Some "value"; Description = "description"; Help = None; Type = UsageType.Arg }]
 
 
 module Bind =
@@ -783,7 +783,7 @@ module Bind =
             }
 
         usage p "cmd sub --arg x"
-        =! [ { Name = Some "sub"; Alt = None; Value = None; Description = "sub desc"; Type = UsageType.Required} ]
+        =! [ { Name = Some "sub"; Alt = None; Value = None; Description = "sub desc"; Help = None; Type = UsageType.Required} ]
 
     [<Fact>]
     let ``bind failing on first returns first  usage``() =
@@ -795,7 +795,7 @@ module Bind =
             }
 
         usage p "other sub --arg x"
-        =! [ { Name = Some "cmd"; Alt = None; Value = None; Description = "desc"; Type = UsageType.Required} ]
+        =! [ { Name = Some "cmd"; Alt = None; Value = None; Description = "desc"; Help = None; Type = UsageType.Required} ]
 
     [<Fact>]
     let ``bind failing on second returns second usage``() =
@@ -807,7 +807,7 @@ module Bind =
             }
 
         usage p "cmd other --arg x"
-        =! [ { Name = Some "sub"; Alt = None; Value = None; Description = "sub desc"; Type = UsageType.Required} ]
+        =! [ { Name = Some "sub"; Alt = None; Value = None; Description = "sub desc"; Help = None; Type = UsageType.Required} ]
 
 module Ret =
     [<Property>]
@@ -872,8 +872,8 @@ module Alt =
                 <|> cmd "command2" null "desc cmd2"
         
         usage p "cmd1 --arg value"
-        =! [ { Name = Some "cmd1"; Alt = None; Value = None; Description = "desc cmd1"; Type = UsageType.Required }
-             { Name = Some "command2"; Alt = None; Value = None; Description = "desc cmd2"; Type = UsageType.Required }]
+        =! [ { Name = Some "cmd1"; Alt = None; Value = None; Description = "desc cmd1"; Help = None; Type = UsageType.Required }
+             { Name = Some "command2"; Alt = None; Value = None; Description = "desc cmd2"; Help = None; Type = UsageType.Required }]
 
     [<Fact>]
     let ``Alt alt aggregates usages (second)``() =
@@ -881,8 +881,8 @@ module Alt =
                 <|> cmd "command2" null "desc cmd2"
         
         usage p "command2 --arg value"
-        =! [ { Name = Some "cmd1"; Alt = None; Value = None; Description = "desc cmd1"; Type = UsageType.Required }
-             { Name = Some "command2"; Alt = None; Value = None; Description = "desc cmd2"; Type = UsageType.Required }]
+        =! [ { Name = Some "cmd1"; Alt = None; Value = None; Description = "desc cmd1"; Help = None; Type = UsageType.Required }
+             { Name = Some "command2"; Alt = None; Value = None; Description = "desc cmd2"; Help = None; Type = UsageType.Required }]
 
 
     [<Fact>]
@@ -891,8 +891,8 @@ module Alt =
                 <|> cmd "command2" null "desc cmd2"
         
         usage p "other --arg value"
-        =! [ { Name = Some "cmd1"; Alt = None; Value = None; Description = "desc cmd1"; Type = UsageType.Required }
-             { Name = Some "command2"; Alt = None; Value = None; Description = "desc cmd2"; Type = UsageType.Required }]
+        =! [ { Name = Some "cmd1"; Alt = None; Value = None; Description = "desc cmd1"; Help = None; Type = UsageType.Required }
+             { Name = Some "command2"; Alt = None; Value = None; Description = "desc cmd2"; Help = None; Type = UsageType.Required }]
 
 module Error =
     [<Property>]

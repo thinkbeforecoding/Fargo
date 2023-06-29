@@ -17,7 +17,7 @@ type UsageType =
 | Required = 2
 | Many = 4
 
-type Usage = { Name: string option; Alt: string option; Value: string option; Description: string; Type: UsageType}
+type Usage = { Name: string option; Alt: string option; Value: string option; Description: string; Help: string option; Type: UsageType}
     with
         member this.IsRequired = this.Type &&& UsageType.Required <> enum 0
         member this.IsArg = this.Type &&& UsageType.Arg <> enum 0
@@ -38,7 +38,7 @@ type ParseResult<'t> =
 type Arg<'a> = int voption -> Tokens -> ParseResult<'a> * Tokens * Usages
 
 module Usages =
-    let merge x y = { Path = x.Path @ y.Path; Options = x.Options @ y.Options}
+    let merge x y = { Path = y.Path @ x.Path ; Options = x.Options @ y.Options}
 
     let empty = {Path = []; Options = []}
 
@@ -90,7 +90,7 @@ module Usage =
 [<AutoOpen>]
 module Fargo =
     let cmd name alt description: Arg<string> =
-        let usage = { Name = Some name; Alt = Option.ofObj alt; Value = None; Description = description; Type = UsageType.Required }
+        let usage = { Name = Some name; Alt = Option.ofObj alt; Value = None; Description = description; Help = None; Type = UsageType.Required }
         let matchusages = { Path = [ usage ]; Options = [usage]} 
         let failusages = { Path = []; Options = [usage]} 
         let notFound = Failure [$"Command %s{name} not found"]
@@ -146,12 +146,12 @@ module Fargo =
             | ValueNone -> Success None, remaining  , usages
 
     let opt name alt value description: Arg<string option> =
-        let usage = { Name = Some ("--" + name); Alt = Usage.Short.ofString alt; Value = Some value; Description = description; Type = UsageType.Arg }
+        let usage = { Name = Some ("--" + name); Alt = Usage.Short.ofString alt; Value = Some value; Description = description; Help = None; Type = UsageType.Arg }
         let usages = { Path = []; Options = [usage]}
         fun pos tokens -> findArg usage usages (fun _ -> []) pos tokens []
 
     let arg value description: Arg<string option> =
-        let usage = { Name = None; Alt = None; Value = Some value; Description = description; Type = UsageType.Arg}
+        let usage = { Name = None; Alt = None; Value = Some value; Description = description; Help = None; Type = UsageType.Arg}
         let usages = { Path = []; Options = [usage]}
         fun pos tokens ->
             match tokens with
@@ -205,7 +205,7 @@ module Fargo =
             reqResult, rest, Usage.req usages
 
     let flag name alt description : Arg<bool> =
-        let usage = {Name = Some ("--" + name); Alt = Usage.Short.ofString alt; Value = None; Description = description; Type = UsageType.Arg}
+        let usage = {Name = Some ("--" + name); Alt = Usage.Short.ofString alt; Value = None; Description = description; Help = None; Type = UsageType.Arg}
         let usages = { Path = []; Options = [usage]} 
         let rec findFlag pos tokens remaining =
             match tokens with
@@ -341,7 +341,7 @@ module Fargo =
             match x pos tokens with
             | Success x, restx, usagex ->
                     let y, resty, usagey = f x pos restx
-                    y, resty,  { Path = usagex.Path @ usagey.Path; Options = usagey.Options}
+                    y, resty,  { Path = usagey.Path @ usagex.Path; Options = usagey.Options}
             | Failure ex, restx, usagex ->
                 Failure ex, restx, usagex
             | Complete (c,i), restx, usagex ->
@@ -416,6 +416,20 @@ module Fargo =
     let cmdError<'t> : Arg<'t> =
         errorf (function [] -> "Missing command"| token :: _ -> $"Unknown command %s{token.Text}")
 
+    let help text (arg: Arg<'t>) : Arg<'t> =
+        fun pos tokens ->
+            let result, rest, usages = arg pos tokens
+            result, rest, {
+                Path = 
+                    match usages.Path with
+                    | usage :: tail -> { usage with Help = Some text} :: tail
+                    | _ -> usages.Path
+                Options =
+                    match usages.Options with
+                    | usage :: tail -> { usage with Help = Some text} :: tail
+                    | _ -> usages.Options
+            }
+
 
     
     let tryParseTokens (arg: Arg<'a>) tokens =
@@ -449,7 +463,7 @@ module Fargo =
     let printUsage (usages: Usages) =
         printf $"%s{Colors.yellow}Usage: "
         
-        for c in usages.Path do
+        for c in List.rev usages.Path do
             c.Name |> Option.defaultValue "unknown" |> printf "%s "
         let cmds =
             usages.Options
@@ -481,6 +495,15 @@ module Fargo =
                 printf " "
         printfn $"%s{Colors.def}"
 
+    let printDescription usages =
+        match usages.Path with
+        | usage :: _ ->
+            let help = usage.Help |> Option.defaultValue usage.Description
+            printfn ""
+            printfn "%s" help
+            printfn ""
+
+        | [] -> ()
 
     let printOptions (usages: Usage list) =
         let cmds =
@@ -564,6 +587,7 @@ module Fargo =
 
     let printHelp usages =
         printUsage usages
+        printDescription usages
         printOptions usages.Options
 
     let private (|Int|_|) (input: string) =

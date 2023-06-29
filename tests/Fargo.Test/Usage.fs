@@ -79,7 +79,7 @@ Commands:
 let ``cmd alt usage``() =
     let p = 
         cmd "load" "ld" "load the file"
-        <|> cmd "save" "sv" "save the file"
+        <|> (cmd "save" "sv" "save the file" |> help "saves the file to avoid bad things")
         <|> error "Nope"
     outUsage p ""
     =! $"""Usage: [command]
@@ -93,19 +93,20 @@ let ``cmd alt usage after matching``() =
         fargo {
             let! c = 
                 cmd "load" "ld" "load the file"
-                <|> cmd "save" "sv" "save the file"
+                <|> (cmd "save" "sv" "save the file" |> help "saves the file to avoid bad things")
                 <|> error "Nope"
             let! o = opt "opt" "o" "value" "the value" 
             return c }
         
     outUsage p "save "
     =! $"""Usage: save [options]
+saves the file to avoid bad things
 Options:
     --opt, -o <value>       the value"""
 
 
 [<Fact>]
-let ``nest cmd alt usage after matching``() =
+let ``nested cmd alt usage after matching``() =
     let p =
         fargo {
             match! cmd "file" null "file operation"
@@ -128,12 +129,13 @@ let ``nest cmd alt usage after matching``() =
         
     outUsage p "file "
     =! $"""Usage: file [command]
+file operation
 Commands:
     load, ld                load the file
     save, sv                save the file"""
 
 [<Fact>]
-let ``nest cmd alt usage after matching both commands``() =
+let ``nested cmd alt usage after matching both commands``() =
     let p =
         fargo {
             match! cmd "file" null "file operation"
@@ -156,6 +158,7 @@ let ``nest cmd alt usage after matching both commands``() =
         
     outUsage p "file save"
     =! $"""Usage: file save <path>
+save the file
 Arguments:
     <path>                  the path"""
 
