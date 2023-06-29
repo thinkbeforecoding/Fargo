@@ -1,7 +1,8 @@
 source https://api.nuget.org/v3/index.json
 storage: None
+nuget DEdge.Diffract
 nuget FSharp.Core
 nuget FsCheck.Xunit 
 nuget Microsoft.NET.Test.Sdk
-nuget Xunit
+nuget Xunit 
 nuget xunit.runner.visualstudio

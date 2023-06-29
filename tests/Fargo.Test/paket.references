@@ -3,3 +3,4 @@ Microsoft.NET.Test.Sdk
 FSharp.Core
 Xunit
 xunit.runner.visualstudio
+DEdge.Diffract

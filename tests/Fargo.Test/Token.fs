@@ -2,12 +2,14 @@
 open Xunit
 open FsCheck
 open FsCheck.Xunit
+open DEdge.Diffract
 
 open Fargo
 
 
 
-let (=!) (actual:'a) (expected:'a) = Assert.Equal<'a>(expected, actual)
+
+let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
 
 let token text s e = { Text = text; Extent = {Start = s; End = e }; Quotes = NoQuotes} 

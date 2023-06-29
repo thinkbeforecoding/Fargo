@@ -1,8 +1,11 @@
 ﻿module Fargo.AllAtOnce
 
 open Fargo
-open Fargo.Opertators
+open Fargo.Operators
 open Xunit
+open DEdge.Diffract
+
+let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
 type Voice = Soft | Standard | Loud | Funny
 
@@ -56,7 +59,6 @@ let p =
                 return SelectVoice(voice, volume)
     }
 
-let (=!) (actual:'a) (expected:'a) = Assert.Equal<'a>(expected, actual)
 
 
 let parse input =
@@ -160,22 +162,22 @@ let ``Valid sub command with required arg but missing value ``() =
 [<Fact>]
 let ``--help return local usage even when command matches``() =
     parse "voice select --voice funny --help"
-    =! Error([], ["--voice";"--volume"])
+    =! Error(["Unknown argument --help"], ["--voice";"--volume"])
 
 [<Fact>]
 let ``--help return local usage even when command fails``() =
     parse "voice select --voice nope --help"
-    =! Error([], ["--voice";"--volume"])
+    =! Error([ "Unknown voice nope" ], ["--voice";"--volume"])
 
 [<Fact>]
 let ``--help return local usage for partial parsing``() =
     parse "voice --help"
-    =! Error([], ["list";"select"])
+    =! Error([ "Unknown command --help" ], ["list";"select"])
 
 [<Fact>]
 let ``--help return main usage``() =
     parse "--help"
-    =! Error([], ["say";"voice"])
+    =! Error([ "Unknown command --help" ], ["say";"voice"])
 
 [<Fact>]
 let ``completion on - returns all args``() =

@@ -1,15 +1,16 @@
 module Fargo.Completion
 open Fargo
-open Fargo.Opertators 
+open Fargo.Operators 
 
 open Xunit
 open FsCheck
 open FsCheck.Xunit
+open DEdge.Diffract
 
 let complete (arg: Arg<_>) pos cmdLine =
     complete arg pos (Token.ofString cmdLine)
 
-let (=!) (actual:'a) (expected:'a) = Assert.Equal<'a>(expected, actual)
+let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
 module Flag =
 

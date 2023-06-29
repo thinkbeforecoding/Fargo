@@ -8,34 +8,36 @@ open Fargo
 open System
 open Console
 
-type Completer = string -> string list
+[<AutoOpen>]
+module Core =
+    type Completer = string -> string list
 
-[<Flags>]
-type UsageType =
-| None = 0
-| Arg = 1
-| Required = 2
-| Many = 4
+    [<Flags>]
+    type UsageType =
+    | None = 0
+    | Arg = 1
+    | Required = 2
+    | Many = 4
 
-type Usage = { Name: string option; Alt: string option; Value: string option; Description: string; Help: string option; Type: UsageType}
-    with
-        member this.IsRequired = this.Type &&& UsageType.Required <> enum 0
-        member this.IsArg = this.Type &&& UsageType.Arg <> enum 0
-        member this.IsMany = this.Type &&& UsageType.Many <> enum 0
+    type Usage = { Name: string option; Alt: string option; Value: string option; Description: string; Help: string option; Type: UsageType}
+        with
+            member this.IsRequired = this.Type &&& UsageType.Required <> enum 0
+            member this.IsArg = this.Type &&& UsageType.Arg <> enum 0
+            member this.IsMany = this.Type &&& UsageType.Many <> enum 0
 
-type Usages =
-    { Path:  Usage list
-      Options: Usage list }
-type Tokens = Token list
+    type Usages =
+        { Path:  Usage list
+          Options: Usage list }
+    type Tokens = Token list
 
-type ParseResult<'t> =
-    | Success of 't
-    | Failure of string list
-    | Complete of string list * important: bool
+    type ParseResult<'t> =
+        | Success of 't
+        | Failure of string list
+        | Complete of string list * important: bool
 
 
 
-type Arg<'a> = int voption -> Tokens -> ParseResult<'a> * Tokens * Usages
+    type Arg<'a> = int voption -> Tokens -> ParseResult<'a> * Tokens * Usages
 
 module Usages =
     let merge x y = { Path = y.Path @ x.Path ; Options = x.Options @ y.Options}
@@ -285,6 +287,22 @@ module Fargo =
             | Complete (c,i), rest, usage ->
                 Complete (c,i), rest, usage
 
+    let all value description : Arg<Token list> =
+        fun pos tokens ->
+            Success tokens, [], { Path = []; Options = [{ Name = None; Alt = None; Value = Some value; Description = description; Help = None; Type = UsageType.Arg }] }
+
+    let validate (f: 'a -> bool) error (arg: Arg<'a>) : Arg<'a> =
+        fun pos tokens ->
+            let result, tokens, usages = arg pos tokens
+            match result with
+            | Success v when not (f v) ->
+                Failure [error], tokens, usages
+            | _ -> result, tokens, usages
+    
+    let optValidate (f: 'a -> bool) error (arg: Arg<'a option>) : Arg<'a option> =
+        validate (function Some v -> f v | None -> true) error arg
+
+
     let nonEmpty error (arg: Arg<'a list>) : Arg<'a list> =
         fun pos tokens ->
             match arg pos tokens with
@@ -407,6 +425,9 @@ module Fargo =
     let error message : Arg<_> =
         fun pos tokens ->
             Failure [message], tokens, Usages.empty 
+    let errors messages : Arg<_> =
+        fun pos tokens ->
+            Failure messages, tokens, Usages.empty 
 
     let errorf<'t> messageFunc : Arg<'t> =
         fun pos tokens ->
@@ -431,19 +452,40 @@ module Fargo =
             }
 
 
+module Operators =
+    let (<|>) x y = x |> alt y
+    let (<|?>) x y = x |> optAlt y
+    let (|>>) x v = x |> map (fun _ -> v) 
+
+module Completer =
+    let empty (s: string) : string list = []
+
+    let choices (choices: string list) (s: string) =
+        [ for c in choices do
+            if c.StartsWith(s) then
+                c
+        ]
+
+[<AutoOpen>]
+module Run =
+    open Core
+    open Fargo
+    open Operators
+
+    let toResult (arg: Arg<'a>) : Arg<ParseResult<'a> * Usages> =
+        fun pos tokens ->
+            let result, tokens, usages = arg pos tokens
+            Success (result, usages), tokens, usages
     
     let tryParseTokens (arg: Arg<'a>) tokens =
-        let (|Help|_|) tokens = 
-            if List.exists (fun t -> t.Text = "--help") tokens then
-                Some()
-            else
-                None
-
         match arg ValueNone tokens with
-        | _, Help, usage -> Error([], usage)
         | Success x, [], _ -> Ok x
-        | Success _, cmd :: _, usage -> Error ([$"Unknown command line argument '%s{cmd.Text}'"], usage)
-        | Failure e, _, usage -> Error (e, usage)
+        | Core.Failure e, _, usages -> Error (e, usages)
+        | Success _, cmd :: _, usages ->
+            if cmd.Text.StartsWith("-") then
+                Error ([$"Unknown argument %s{cmd.Text}"], usages)
+            else
+                Error ([$"Unknown command %s{cmd.Text}"], usages)
         | Complete _, _, usage -> Error ([ "Unexpected completion" ], usage)
 
     let complete (arg: Arg<_>) (pos: int) tokens =
@@ -452,7 +494,6 @@ module Fargo =
         | Complete (choices,_), _,_ ->
             choices
         |  _,_,_ -> []
-
 
 
 
@@ -590,68 +631,174 @@ module Fargo =
         printDescription usages
         printOptions usages.Options
 
+    type Shell = Powershell
+
+    let printCompletion appName =
+        function
+        | Powershell -> 
+            printfn """
+Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
+    param($commandName, $wordToComplete, $cursorPosition)
+        %s complete --position $cursorPosition "$wordToComplete" | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+        }
+}        
+            """ appName appName
+     
+
     let private (|Int|_|) (input: string) =
         Parsers.Int32.tryParse input
 
-    let run appName arg (cmdLine: string[]) f =
-        match Array.toList cmdLine with
-        |  "complete" :: rest ->
-            let pos, tail =
-                match rest with
-                | "--position" :: Int pos :: tail -> pos, tail 
-                | _ -> Int32.MaxValue, rest
-            let tokens =
-                match Token.ofCmdLine tail with
-                | { Text = t} :: rest when t = appName -> rest
-                | list -> list
-            for result in complete arg pos tokens do
-                printfn "%s" result 
-            0
-        | "completion" :: "powershell" :: _ ->
-            printfn """
-    Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
-        param($commandName, $wordToComplete, $cursorPosition)
-            %s complete --position $cursorPosition "$wordToComplete" | ForEach-Object {
-            [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    type TopCmd = CompleteCmd | CompletionCmd | RunCmd
+    type Top =
+        | TopComplete of position:int * cmdLine: Tokens
+        | TopCompletion of Shell
+        | TopRun
+        | TopHelp of Token list * Usages option
+
+    let topArg =
+        cmd "complete" null "returns suggestions for auto completion" |>> CompleteCmd
+        <|> (cmd "completion" null "emit shell completion script" |>> CompletionCmd)
+        <|> ret RunCmd 
+
+    let pPosition =
+        opt "position" "p" "cursor-pos" "the current cursor position"
+        |> optParse (Parsers.Int32.tryParse >> Parsers.error "position should be a integer")
+        |> optValidate (fun p -> p >= 0) "position should be 0 or greater"
+        |> defaultValue Int32.MaxValue
+
+    let pShell =
+        let shells =  Map.ofList [ "powershell", Powershell ]
+        arg "shell" "the shell for which to emit the script"
+        |> completer (Completer.choices (shells |> Map.toList |> List.map fst) )
+        |> reqArg
+        |> parse (fun shell ->
+                    match Map.tryFind shell shells with
+                    | Some shell -> Ok shell
+                    | None -> Error "unknown shell" )
+
+    let pRemoveAppName name : Arg<unit> =
+        let exe = name + ".exe"
+        fun _pos tokens ->
+            match tokens with
+            | head :: tail 
+                when String.Equals(head.Text, name, StringComparison.InvariantCultureIgnoreCase) 
+                || String.Equals(head.Text, exe, StringComparison.InvariantCultureIgnoreCase) ->
+                Success(), tail, Usages.empty    
+            | _ -> Success(), tokens, Usages.empty
+
+    let getUsages (arg: Arg<'a>) : Arg<Result<'a, string list> * Usages> =
+        fun pos tokens ->
+            let result, tokens, usages = arg pos tokens 
+            match result with
+            | Success r -> Success(Ok r, usages), tokens, usages
+            | Core.Failure e -> Success(Error e, usages), tokens, usages
+            | Complete(c,i) -> Complete(c,i), tokens, usages
+
+    type Help<'a> =
+        | Run of 'a
+        | Help of Token list * Usages option
+
+    let runHelp (arg: Arg<'a>) : Arg<Help<'a>> =
+        fun pos tokens ->
+            let help, tokens, u = flag "help" "h" "display help" pos tokens 
+            match help with
+            | Success true ->
+                let _, tokens', usages = arg pos tokens
+                if tokens' <> tokens then
+                    Success (Help(tokens', Some usages)), tokens', usages
+                else
+                    Success (Help(tokens', None)), tokens', usages
+
+            | Success false ->
+                let r, tokens, usages = arg pos tokens
+                match r with
+                | Success v -> Success(Run v), tokens, usages
+                | Core.Failure e -> Core.Failure e, tokens, usages 
+                | Complete(c,i) -> Complete(c,i), tokens, usages
+            |  Core.Failure e ->
+                Core.Failure e, tokens, u
+            | Complete(c,i) ->
+                Complete(c,i), tokens, u
+
+
+
+
+
+    let pTop =
+        fargo {
+            match! topArg with
+            | CompleteCmd ->
+
+                let! position = pPosition
+                and! rest = all "..." "the command line text to complete"
+
+
+                return TopComplete(position, rest)
+
+            | CompletionCmd ->
+                let! shell = pShell
+                return TopCompletion shell
+
+            | RunCmd ->
+                return TopRun
+        }
+
+    let pRun appName =
+            fargo {
+                do! pRemoveAppName appName
+                match! runHelp pTop with
+                | Help(rest, usages) ->
+                    return TopHelp(rest,usages)
+                | Run cmd -> return cmd
             }
-    }        
-            """ appName appName
-            0
-        | args ->
-            try 
-                match tryParseTokens arg (Token.ofCmdLine args) with
-                | Ok cmd ->
-                    try
-                        f cmd
-                    with
-                    | ex -> printErrors [string ex]
 
-                | Error(errs, usage) ->
-                    printfn "%s" appName
-                    printErrors errs
-                    printfn ""
-                    printHelp usage
-
-                0
+    let innerRun arg tokens f =
+        match tryParseTokens arg tokens with
+        | Ok cmd ->
+            try
+                f cmd
             with
             | ex ->
-                eprintfn "%O" ex
+                printErrors [string ex]
                 -1
+        | Error(errors, usages) -> 
+                printErrors errors
+                printfn ""
+                printHelp usages
+                0
 
 
-module Completer =
-    let empty (s: string) : string list = []
+    let run appName arg (cmdLine: string[]) f =
 
-    let choices (choices: string list) (s: string) =
-        [ for c in choices do
-            if c.StartsWith(s) then
-                c
-        ]
+        let tokens = Token.ofCmdLine cmdLine
+        innerRun (pRun appName) tokens (function
+            | TopComplete(pos, rest)  ->
+                let cmdTokens = 
+                    match rest with
+                    | [x] -> Token.ofString x.Text
+                    | _ -> rest
+                for result in complete arg pos cmdTokens do
+                    printfn "%s" result  
+                0
+            | TopCompletion shell ->
+                printCompletion appName shell
+                0
+            | TopRun ->
+                innerRun arg tokens f
+            | TopHelp(_, Some usages) ->
+                printHelp usages
+                0
+            | TopHelp(rest, None) ->
+                let _,_,usages = arg ValueNone rest
+                printHelp usages
+                0
 
-module Opertators =
-    let (<|>) x y = x |> alt y
-    let (<|?>) x y = x |> optAlt y
-    let (|>>) x v = x |> map (fun _ -> v) 
+        )
+
+
+
+
 
 module Pipe =
     open FSharp.Core.CompilerServices

@@ -1,11 +1,12 @@
 module Fargo.Parsing
 open Fargo
-open Fargo.Opertators 
+open Fargo.Operators 
 open Xunit
 open FsCheck
 open FsCheck.Xunit
+open DEdge.Diffract
 
-let (=!) (actual:'a) (expected:'a) = Assert.Equal<'a>(expected, actual)
+let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
 
 let parse (arg: Arg<'t>) input =

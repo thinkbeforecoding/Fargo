@@ -3,10 +3,11 @@ module Fargo.Usage
 open System
 open System.Text.RegularExpressions
 open Fargo
-open Fargo.Opertators
+open Fargo.Operators
 open Xunit
+open DEdge.Diffract
 
-let (=!) (actual:'a) (expected:'a) = Assert.Equal<'a>(expected, actual)
+let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
 let outUsage p input =
     let _,_,usages = p ValueNone (Token.ofString input)
@@ -18,6 +19,14 @@ let outUsage p input =
     |> Array.filter (not << String.IsNullOrEmpty)
     |> String.concat Environment.NewLine
 
+let outRun p input =
+    let w = new IO.StringWriter()
+    Console.SetOut(w)
+    run "test" p [|input|] (fun _ -> 0) |> ignore
+    Regex.Replace(w.ToString(),$"{'\x1b'}\[\d+m","").Split('\n')
+    |> Array.map (fun l -> l.TrimEnd())
+    |> Array.filter (not << String.IsNullOrEmpty)
+    |> String.concat Environment.NewLine
 
 [<Fact>]
 let ``arg usage``() =
@@ -178,3 +187,53 @@ Arguments:
 Options:
     --opt, -o <value>       the value
     --flag, -f              the flag"""
+
+[<Fact>]
+let ``help``() =
+    let p =
+        fargo {
+            let! o = opt "opt" "o" "value" "the value"
+            and! f = flag "flag" "f" "the flag"
+            and! a = arg "arg" "the arg" |> reqArg
+            return o,a }
+        
+    outRun p "--help"
+    =! $"""Usage: [options] <arg>
+Arguments:
+    <arg>                   the arg
+Options:
+    --opt, -o <value>       the value
+    --flag, -f              the flag"""
+
+
+[<Fact>]
+let ``complete help``() =
+    let p =
+        fargo {
+            let! o = opt "opt" "o" "value" "the value"
+            and! f = flag "flag" "f" "the flag"
+            and! a = arg "arg" "the arg" |> reqArg
+            return o,a }
+        
+    outRun p "complete --help"
+    =! $"""Usage: complete [options] [<...>]
+returns suggestions for auto completion
+Options:
+    --position, -p <cursor-pos> the current cursor position
+    <...>                   the command line text to complete"""
+
+
+[<Fact>]
+let ``complettion help``() =
+    let p =
+        fargo {
+            let! o = opt "opt" "o" "value" "the value"
+            and! f = flag "flag" "f" "the flag"
+            and! a = arg "arg" "the arg" |> reqArg
+            return o,a }
+        
+    outRun p "completion --help"
+    =! $"""Usage: completion <shell>
+emit shell completion script
+Arguments:
+    <shell>                 the shell for which to emit the script"""
