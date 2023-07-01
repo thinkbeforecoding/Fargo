@@ -22,7 +22,7 @@ let outUsage p input =
 let outRun p input =
     let w = new IO.StringWriter()
     Console.SetOut(w)
-    run "test" p [|input|] (fun _ -> 0) |> ignore
+    run "test" p [|input|] (fun v -> printfn "%A" v; 0) |> ignore
     Regex.Replace(w.ToString(),$"{'\x1b'}\[\d+m","").Split('\n')
     |> Array.map (fun l -> l.TrimEnd())
     |> Array.filter (not << String.IsNullOrEmpty)
@@ -224,7 +224,7 @@ Options:
 
 
 [<Fact>]
-let ``complettion help``() =
+let ``completion help``() =
     let p =
         fargo {
             let! o = opt "opt" "o" "value" "the value"
@@ -237,3 +237,53 @@ let ``complettion help``() =
 emit shell completion script
 Arguments:
     <shell>                 the shell for which to emit the script"""
+
+
+[<Fact>]
+let ``complettion run``() =
+    let p =
+        fargo {
+            let! o = opt "opt" "o" "value" "the value"
+            and! f = flag "flag" "f" "the flag"
+            and! a = arg "arg" "the arg" |> reqArg
+            return o,a }
+        
+    outRun p "completion powershell"
+    =! """Register-ArgumentCompleter -Native  -CommandName test -ScriptBlock {
+    param($commandName, $wordToComplete, $cursorPosition)
+        test complete --position $cursorPosition "$wordToComplete" | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+        }
+}"""
+
+
+[<Fact>]
+let ``standard run``() =
+    let p =
+        fargo {
+            let! o = opt "opt" "o" "value" "the value"
+            and! f = flag "flag" "f" "the flag"
+            and! a = arg "arg" "the arg" |> reqArg
+            return o,a }
+        
+    outRun p "-o x value"
+    =! """(Some "x", "value")"""
+
+[<Fact>]
+let ``cmd help``() =
+    let p =
+        fargo {
+            let! _ = cmd "cmd" null "a command"
+            let! o = opt "opt" "o" "value" "the value"
+            and! f = flag "flag" "f" "the flag"
+            and! a = arg "arg" "the arg" |> reqArg
+            return o,a }
+        
+    outRun p "cmd --help"
+    =! $"""Usage: cmd [options] <arg>
+a command
+Arguments:
+    <arg>                   the arg
+Options:
+    --opt, -o <value>       the value
+    --flag, -f              the flag"""

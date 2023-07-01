@@ -1,5 +1,7 @@
 ﻿module Fargo.AllAtOnce
 
+open System
+open System.Text.RegularExpressions
 open Fargo
 open Fargo.Operators
 open Xunit
@@ -33,7 +35,7 @@ let voiceCompleter =
     Completer.choices [ "soft"; "standard"; "loud"; "funny" ]
 
 let pVolume = opt "volume" "vl" "0..100" "the volume of the voice" |> optParse (Parsers.Int32.tryParse >> Parsers.error "Invalid volume") 
-let pVoice = opt "voice" "vc" "soft|standard|loud|funny" "the voice to use" |> completer voiceCompleter |> optParse parseVoice
+let pVoice = opt "voice" "vc" "soft|standard|loud|funny" "the voice to use" |> optCompleter voiceCompleter |> optParse parseVoice
 let p =
     fargo {
         match!
@@ -66,7 +68,17 @@ let parse input =
     |> Result.mapError (fun (errs,usages) -> errs, [ for u in usages.Options -> u.Name |> Option.defaultValue "" ])
 
 let complete pos input =
-    complete p pos (Token.ofString input)
+    Fargo.Run.complete p pos (Token.ofString input)
+
+let complete2 pos input =
+    let w = new IO.StringWriter()
+    Console.SetOut(w)
+
+    Run.run "test" p [|"complete"; "--position"; string pos;  input |] (fun x -> printfn "%A" x; 0) |> ignore
+    Regex.Replace(w.ToString(),$"{'\x1b'}\[\d+m","").Split('\n')
+    |> Array.map (fun l -> l.TrimEnd())
+    |> Array.filter (not << String.IsNullOrEmpty)
+    |> String.concat Environment.NewLine
 
 
 [<Fact>]
@@ -193,3 +205,18 @@ let ``completion after command returns all args``() =
 let ``completion after voice arg returns voice names``() =
     complete 21 "voice select --voice "
     =! ["soft"; "standard"; "loud"; "funny"]
+
+[<Fact>]
+let ``completion after voice arg returns voice names integration``() =
+    complete2 21 "voice select --voice "
+    =! """soft
+standard
+loud
+funny"""
+
+[<Fact>]
+let ``completion of command complete``() =
+    complete2 15 "test voice sele"
+    =! """select"""
+
+

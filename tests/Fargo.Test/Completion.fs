@@ -55,43 +55,43 @@ module Arg =
 
     [<Fact>]
     let ``complete at the end of cmd line suggest current usage``() =
-        let f = opt "arg" "a" "value" "desc" |> completer (Completer.choices ["value1"; "value2"])
+        let f = opt "arg" "a" "value" "desc" |> optCompleter (Completer.choices ["value1"; "value2"])
         complete f 5 "some "
         =! ["--arg"; "-a"]
 
     [<Fact>]
     let ``complete at the end of cmd line suggest custom completer if arg matches``() =
-        let f = opt "arg" "a" "value" "desc" |> completer (Completer.choices ["value1"; "value2"])
+        let f = opt "arg" "a" "value" "desc" |> optCompleter (Completer.choices ["value1"; "value2"])
         complete f 11 "some --arg "
         =! ["value1"; "value2"]
 
     [<Fact>]
     let ``complete doesn't extend if token doesn't match start``() =
-        let f = opt "arg" "a" "value" "desc" |> completer (Completer.choices ["value1"; "value2"])
+        let f = opt "arg" "a" "value" "desc" |> optCompleter (Completer.choices ["value1"; "value2"])
         complete f 7 "some -x"
         =! []
 
     [<Fact>]
     let ``complete does extend if strictly after``() =
-        let f = opt "arg" "a" "value" "desc" |> completer (Completer.choices ["value1"; "value2"])
+        let f = opt "arg" "a" "value" "desc" |> optCompleter (Completer.choices ["value1"; "value2"])
         complete f 8 "some -x "
         =! [ "--arg"; "-a" ]
 
     [<Fact>]
     let ``complete does extend if token matches start``() =
-        let f = opt "arg" "a" "value" "desc" |> completer (Completer.choices ["value1"; "value2"])
+        let f = opt "arg" "a" "value" "desc" |> optCompleter (Completer.choices ["value1"; "value2"])
         complete f 9 "some --ar"
         =! [ "--arg" ]
 
     [<Fact>]
     let ``complete does extend if token matches start even in middle of token``() =
-        let f = opt "arg" "a" "value" "desc" |> completer (Completer.choices ["value1"; "value2"])
+        let f = opt "arg" "a" "value" "desc" |> optCompleter (Completer.choices ["value1"; "value2"])
         complete f 7 "some --ar"
         =! [ "--arg" ]
 
     [<Fact>]
     let ``complete doesn't suggest anymore if arg as already been matched``() =
-        let f = opt "arg" "a" "value" "desc" |> completer (Completer.choices ["value1"; "value2"])
+        let f = opt "arg" "a" "value" "desc" |> optCompleter (Completer.choices ["value1"; "value2"])
         complete f 19 "some --arg value2 -"
         =! []
 

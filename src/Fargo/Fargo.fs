@@ -164,7 +164,7 @@ module Fargo =
                 | ValueSome _ -> Complete([],false), tokens, usages
                 | _ -> Success None, tokens, usages
 
-    let completer complete (arg: Arg<string option>) : Arg<string option> =
+    let optCompleter complete (arg: Arg<string option>) : Arg<string option> =
         fun pos tokens ->
             let result, rest, usages = arg pos tokens
             match usages.Options with
@@ -172,6 +172,22 @@ module Fargo =
                 findArg usage usages complete pos tokens []
             | _ -> result, tokens, usages
 
+    let argCompleter complete (arg: Arg<string option>) : Arg<string option> =
+        fun pos tokens ->
+            let r, tokens, usages = arg pos tokens
+            match pos with
+            | ValueSome pos ->
+                match List.tryHead tokens with
+                | Some token ->
+                    if Extent.contains pos token.Extent then
+                        Complete(complete token.Text, true), tokens, usages
+                    else
+                        Complete([], false), tokens, usages
+                | None ->
+                    Complete (complete "", true), tokens, usages
+            | ValueNone ->
+                r, tokens, usages
+                
     let reqArg (arg: Arg<'a option>) : Arg<'a> =
         fun pos tokens ->
             let result, rest, usages = arg pos tokens
@@ -653,8 +669,8 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
     type Top =
         | TopComplete of position:int * cmdLine: Tokens
         | TopCompletion of Shell
-        | TopRun
-        | TopHelp of Token list * Usages option
+        | TopRun of Tokens
+        | TopHelp of Tokens * Usages option
 
     let topArg =
         cmd "complete" null "returns suggestions for auto completion" |>> CompleteCmd
@@ -670,7 +686,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
     let pShell =
         let shells =  Map.ofList [ "powershell", Powershell ]
         arg "shell" "the shell for which to emit the script"
-        |> completer (Completer.choices (shells |> Map.toList |> List.map fst) )
+        |> argCompleter (Completer.choices (shells |> Map.toList |> List.map fst) )
         |> reqArg
         |> parse (fun shell ->
                     match Map.tryFind shell shells with
@@ -697,23 +713,29 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
 
     type Help<'a> =
         | Run of 'a
-        | Help of Token list * Usages option
+        | Default of Tokens
+        | Help of Tokens * Usages option
 
-    let runHelp (arg: Arg<'a>) : Arg<Help<'a>> =
+    let runHelp (arg: Arg<Result<'a,Tokens>>) : Arg<Help<'a>> =
         fun pos tokens ->
             let help, tokens, u = flag "help" "h" "display help" pos tokens 
             match help with
             | Success true ->
-                let _, tokens', usages = arg pos tokens
-                if tokens' <> tokens then
-                    Success (Help(tokens', Some usages)), tokens', usages
-                else
-                    Success (Help(tokens', None)), tokens', usages
+                let r, tokens', usages = arg pos tokens                
+                match r with 
+                | Success (Ok _) ->
+                    // this is a command handled by pTop
+                    Success (Help(tokens', Some usages)), [], usages
+                | Success (Error tokens) ->
+                    Success (Help(tokens, None) ), [], usages
+                | _ ->
+                    Success(Help (tokens', Some usages)), [], usages
 
             | Success false ->
                 let r, tokens, usages = arg pos tokens
                 match r with
-                | Success v -> Success(Run v), tokens, usages
+                | Success (Ok v) -> Success(Run v), tokens, usages
+                | Success (Error tokens) -> Success(Default tokens), [], usages
                 | Core.Failure e -> Core.Failure e, tokens, usages 
                 | Complete(c,i) -> Complete(c,i), tokens, usages
             |  Core.Failure e ->
@@ -734,14 +756,15 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
                 and! rest = all "..." "the command line text to complete"
 
 
-                return TopComplete(position, rest)
+                return Ok(TopComplete(position, rest))
 
             | CompletionCmd ->
                 let! shell = pShell
-                return TopCompletion shell
+                return Ok (TopCompletion shell)
 
             | RunCmd ->
-                return TopRun
+                let! tokens = all "..."  ""
+                return Error tokens
         }
 
     let pRun appName =
@@ -751,6 +774,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
                 | Help(rest, usages) ->
                     return TopHelp(rest,usages)
                 | Run cmd -> return cmd
+                | Default tokens -> return TopRun tokens
             }
 
     let innerRun arg tokens f =
@@ -778,13 +802,14 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
                     match rest with
                     | [x] -> Token.ofString x.Text
                     | _ -> rest
-                for result in complete arg pos cmdTokens do
+                for result in complete (fargo { do! pRemoveAppName appName
+                                                return! arg}) pos cmdTokens do
                     printfn "%s" result  
                 0
             | TopCompletion shell ->
                 printCompletion appName shell
                 0
-            | TopRun ->
+            | TopRun tokens ->
                 innerRun arg tokens f
             | TopHelp(_, Some usages) ->
                 printHelp usages
