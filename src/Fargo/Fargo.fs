@@ -863,8 +863,19 @@ module Pipe =
             | ValueSome _ -> Complete([],false), tokens, Usages.empty
 
     let orStdIn (arg: Arg<string option>) : Arg<string list> =
-        arg |> reqOpt |> map (fun x -> [x]) |> alt stdIn
-        
+        fun pos tokens ->
+            let result, tokens', usages = arg pos tokens
+            match result with
+            | Success (Some v) -> Success [ v ], tokens', usages
+            | Success None ->  
+                let result2, tokens'', _ = stdIn pos tokens
+                result2, tokens'', usages 
+            | Failure _ -> 
+                let result2, tokens'', _ = stdIn pos tokens
+                result2, tokens'', usages 
+            | Complete (c,i) ->
+                Complete(c,i), tokens', usages
+
 module Env =
     let envVar name : Arg<string option> =
         fun pos tokens ->
