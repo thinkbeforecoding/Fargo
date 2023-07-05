@@ -803,7 +803,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
         Console.CancelKeyPress
         |> Event.add(fun e -> 
             if graceful then
-                printfn $"{Colors.yellow}[Ctrl+C]Stopping gracefully{Colors.def}"
+                printfn $"{Colors.yellow}[Ctrl+C]Stopping gracefully. Press Ctrl+C again to force stop.{Colors.def}"
                 graceful <- false
                 e.Cancel <- true
                 cts.Cancel()
