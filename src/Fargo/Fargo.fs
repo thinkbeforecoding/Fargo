@@ -864,17 +864,29 @@ module Pipe =
 
     let orStdIn (arg: Arg<string option>) : Arg<string list> =
         fun pos tokens ->
-            let result, tokens', usages = arg pos tokens
-            match result with
-            | Success (Some v) -> Success [ v ], tokens', usages
-            | Success None ->  
-                let result2, tokens'', _ = stdIn pos tokens
-                result2, tokens'', usages 
-            | Failure _ -> 
-                let result2, tokens'', _ = stdIn pos tokens
-                result2, tokens'', usages 
-            | Complete (c,i) ->
-                Complete(c,i), tokens', usages
+            match pos with
+            | ValueNone ->
+                if Console.IsErrorRedirected then
+                    let mutable values = ListCollector()
+                    let mutable line = Console.In.ReadLine()
+                    while line <> null do
+                        values.Add(line)
+                        line <- Console.In.ReadLine()
+                    Success (values.Close()), tokens, Usages.empty
+                else
+                    let result, tokens, usages = arg pos tokens
+                    match result with
+                    | Success (Some v) -> Success [v], tokens, usages
+                    | Success None -> Success [], tokens, usages
+                    | Failure e -> Failure e, tokens, usages
+                    | Complete(c,i) -> Complete(c,i), tokens, usages
+            | ValueSome _ -> 
+                let result, tokens, usages = arg pos tokens
+                match result with
+                | Success (Some v) -> Success [v], tokens, usages
+                | Success None -> Success [], tokens, usages
+                | Failure e -> Failure e, tokens, usages
+                | Complete(c,i) -> Complete(c,i), tokens, usages
 
 module Env =
     let envVar name : Arg<string option> =
