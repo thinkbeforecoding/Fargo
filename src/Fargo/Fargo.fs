@@ -487,6 +487,8 @@ module Run =
     open Core
     open Fargo
     open Operators
+    open System.Threading
+    open System.Threading.Tasks
 
     let toResult (arg: Arg<'a>) : Arg<ParseResult<'a> * Usages> =
         fun pos tokens ->
@@ -777,49 +779,59 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
                 | Default tokens -> return TopRun tokens
             }
 
-    let innerRun arg tokens f =
-        match tryParseTokens arg tokens with
-        | Ok cmd ->
-            try
-                f cmd
-            with
-            | ex ->
-                printErrors [string ex]
-                -1
-        | Error(errors, usages) -> 
-                printErrors errors
-                printfn ""
-                printHelp usages
-                0
+    let innerRun (arg: Arg<'a>) tokens (f: 'a -> Task<int>) : Task<int> =
+        task {
+            match tryParseTokens arg tokens with
+            | Ok cmd ->
+                try
+                    return! f cmd
+                with
+                | ex ->
+                    printErrors [string ex]
+                    return -1
+            | Error(errors, usages) -> 
+                    printErrors errors
+                    printfn ""
+                    printHelp usages
+                    return 0
+        }
 
 
-    let run appName arg (cmdLine: string[]) f =
-
+    let run appName (arg: Arg<'a>) (cmdLine: string[]) (f: CancellationToken ->'a  -> Task<int>) : int =
+        use cts = new CancellationTokenSource()
+        Console.CancelKeyPress
+        |> Event.add(fun e -> 
+            e.Cancel <- true
+            cts.Cancel())
         let tokens = Token.ofCmdLine cmdLine
-        innerRun (pRun appName) tokens (function
-            | TopComplete(pos, rest)  ->
-                let cmdTokens = 
-                    match rest with
-                    | [x] -> Token.ofString x.Text
-                    | _ -> rest
-                for result in complete (fargo { do! pRemoveAppName appName
-                                                return! arg}) pos cmdTokens do
-                    printfn "%s" result  
-                0
-            | TopCompletion shell ->
-                printCompletion appName shell
-                0
-            | TopRun tokens ->
-                innerRun arg tokens f
-            | TopHelp(_, Some usages) ->
-                printHelp usages
-                0
-            | TopHelp(rest, None) ->
-                let _,_,usages = arg ValueNone rest
-                printHelp usages
-                0
-
+        let runner = 
+            innerRun (pRun appName) tokens (fun cmd ->
+                task {
+                    match cmd with
+                    | TopComplete(pos, rest)  ->
+                        let cmdTokens = 
+                            match rest with
+                            | [x] -> Token.ofString x.Text
+                            | _ -> rest
+                        for result in complete (fargo { do! pRemoveAppName appName
+                                                        return! arg}) pos cmdTokens do
+                            printfn "%s" result  
+                        return 0
+                    | TopCompletion shell ->
+                        printCompletion appName shell
+                        return 0
+                    | TopRun tokens ->
+                        return! innerRun arg tokens (f cts.Token)
+                    | TopHelp(_, Some usages) ->
+                        printHelp usages
+                        return 0
+                    | TopHelp(rest, None) ->
+                        let _,_,usages = arg ValueNone rest
+                        printHelp usages
+                        return 0 
+                }
         )
+        runner.Result
 
 
 

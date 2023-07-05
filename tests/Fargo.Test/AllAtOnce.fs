@@ -6,6 +6,7 @@ open Fargo
 open Fargo.Operators
 open Xunit
 open DEdge.Diffract
+open System.Threading.Tasks
 
 let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
@@ -74,7 +75,7 @@ let complete2 pos input =
     let w = new IO.StringWriter()
     Console.SetOut(w)
 
-    Run.run "test" p [|"complete"; "--position"; string pos;  input |] (fun x -> printfn "%A" x; 0) |> ignore
+    Run.run "test" p [|"complete"; "--position"; string pos;  input |] (fun _ x -> printfn "%A" x; Task.FromResult 0) |> ignore
     Regex.Replace(w.ToString(),$"{'\x1b'}\[\d+m","").Split('\n')
     |> Array.map (fun l -> l.TrimEnd())
     |> Array.filter (not << String.IsNullOrEmpty)
