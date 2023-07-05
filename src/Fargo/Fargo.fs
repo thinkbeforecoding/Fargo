@@ -866,7 +866,7 @@ module Pipe =
         fun pos tokens ->
             match pos with
             | ValueNone ->
-                if Console.IsErrorRedirected then
+                if Console.IsInputRedirected then
                     let mutable values = ListCollector()
                     let mutable line = Console.In.ReadLine()
                     while line <> null do
