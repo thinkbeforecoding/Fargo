@@ -799,10 +799,17 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
 
     let run appName (arg: Arg<'a>) (cmdLine: string[]) (f: CancellationToken ->'a  -> Task<int>) : int =
         use cts = new CancellationTokenSource()
+        let mutable graceful = true
         Console.CancelKeyPress
         |> Event.add(fun e -> 
-            e.Cancel <- true
-            cts.Cancel())
+            if graceful then
+                printfn $"{Colors.yellow}[Ctrl+C]Stopping gracefully{Colors.def}"
+                graceful <- false
+                e.Cancel <- true
+                cts.Cancel()
+            else
+                printfn $"{Colors.red}[Ctrl+C]Force stop{Colors.def}"
+            )
         let tokens = Token.ofCmdLine cmdLine
         let runner = 
             innerRun (pRun appName) tokens (fun cmd ->
