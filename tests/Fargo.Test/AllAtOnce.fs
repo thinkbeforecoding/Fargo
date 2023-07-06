@@ -36,7 +36,7 @@ let voiceCompleter =
     Completer.choices [ "soft"; "standard"; "loud"; "funny" ]
 
 let pVolume = opt "volume" "vl" "0..100" "the volume of the voice" |> optParse (Parsers.Int32.tryParse >> Parsers.error "Invalid volume") 
-let pVoice = opt "voice" "vc" "soft|standard|loud|funny" "the voice to use" |> optCompleter voiceCompleter |> optParse parseVoice
+let pVoice = optc "voice" "vc" "soft|standard|loud|funny" "the voice to use" voiceCompleter |> optParse parseVoice
 let p =
     fargo {
         match!

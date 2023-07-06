@@ -9,16 +9,16 @@ open DEdge.Diffract
 let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
 
-let parse (arg: Arg<'t>) input =
-    let result, _, _ = arg ValueNone (Token.ofString input)
+let parse ((p,_): Arg<'t>) input =
+    let result, _, _ = p (Token.ofString input)
     result
 
-let rest (arg: Arg<'t>) input =
-    let _, tokens, _ = arg ValueNone (Token.ofString input)
+let rest ((p,c): Arg<'t>) input =
+    let _, tokens, _ = p (Token.ofString input)
     Token.toString tokens
 
-let usage (arg: Arg<'t>) input =
-    let _, _, usages = arg ValueNone (Token.ofString input)
+let usage ((p,c): Arg<'t>) input =
+    let _, _, usages = p (Token.ofString input)
     usages.Options
     
 
@@ -27,7 +27,7 @@ let usage (arg: Arg<'t>) input =
 let ``flag name parsing succeeds``() =
     let f = flag "flag" "f" "description" 
     parse f "cmd --other-arg value --flag -x"
-    =! Success true
+    =! Ok true
 
 
 
@@ -36,13 +36,13 @@ module Flag =
     let ``flag short name parsing succeeds``() =
         let f = flag "flag" "f" "description" 
         parse f "cmd --other-arg value -f -x"
-        =! Success true
+        =! Ok true
 
     [<Fact>]
     let ``Absence of flag succeeds with value false ``() =
         let f = flag "flag" "f" "description" 
         parse f "cmd --other-arg value -x"
-        =! Success false
+        =! Ok false
 
     [<Fact>]
     let ``flag token is removed after matching``() =
@@ -67,13 +67,13 @@ module ReqFlag =
     let ``reqFlag name parsing succeeds``() =
         let f = flag "flag" "f" "description" |> reqFlag
         parse f "cmd --other-arg value --flag -x"
-        =! Success true
+        =! Ok true
 
     [<Fact>]
     let ``reqFlag short name parsing succeeds``() =
         let f = flag "flag" "f" "description"  |> reqFlag
         parse f "cmd --other-arg value -f -x"
-        =! Success true
+        =! Ok true
 
     [<Fact>]
     let ``reqFlag token is removed after matching``() =
@@ -91,7 +91,7 @@ module ReqFlag =
     let ``Absence of reqFlag fails``() =
         let f = flag "flag" "f" "description" |> reqFlag
         parse f "cmd --other-arg value -x"
-        =! Failure ["Required flag --flag not found"]
+        =! Error ["Required flag --flag not found"]
 
     [<Fact>]
     let ``reqFlag usage is returned if it succeeds``() =
@@ -110,19 +110,19 @@ module Cmd =
     let ``cmd name parsing succeeds when in first position``() =
         let c = cmd "command" "cmd" "description" 
         parse c "command --other-arg value --flag -x"
-        =! Success "command"
+        =! Ok "command"
 
     [<Fact>]
     let ``cmd short name parsing succeeds when in first position``() =
         let c = cmd "command" "cmd" "description" 
         parse c "cmd --other-arg value -f -x"
-        =! Success "command"
+        =! Ok "command"
     
     [<Fact>]
     let ``cmd short name parsing fails when not in first position``() =
         let c = cmd "command" "cmd" "description" 
         parse c "something command --other-arg value -f -x"
-        =! Failure [ "Command command not found"]
+        =! Error [ "Command command not found"]
         
     [<Fact>]
     let ``cmd token is removed after matching``() =
@@ -140,7 +140,7 @@ module Cmd =
     let ``Absence of cmd fails``() =
         let c = cmd "command" "cmd" "description" 
         parse c "somthing --other-arg value -x"
-        =! Failure ["Command command not found"]
+        =! Error ["Command command not found"]
 
     [<Fact>]
     let ``cmd usage is returned if it succeeds``() =
@@ -159,13 +159,13 @@ module Opt =
     let ``arg name parsing succeeds``() =
         let f = opt "arg" "a" "value" "description"
         parse f "cmd --other-arg val --arg value -x"
-        =! Success (Some "value")
+        =! Ok (Some "value")
 
     [<Fact>]
     let ``arg short name parsing succeeds``() =
         let f =  opt "arg" "a" "value" "description"
         parse f "cmd --other-arg val -a value -x"
-        =! Success (Some "value")
+        =! Ok (Some "value")
 
     [<Fact>]
     let ``arg and its value tokens are removed after matching``() =
@@ -189,13 +189,13 @@ module Opt =
     let ``Absence of arg succeeds with None``() =
         let f = opt "arg" "a" "value" "description"
         parse f "cmd --other-arg value -x"
-        =! Success None
+        =! Ok None
 
     [<Fact>]
     let ``arg without it's value fails``() =
         let f = opt "arg" "a" "value" "description"
         parse f "cmd --other-arg val --arg"
-        =! Failure ["Argument --arg value is missing"]
+        =! Error ["Argument --arg value is missing"]
 
 
     [<Fact>]
@@ -221,13 +221,13 @@ module reqOpt =
     let ``req name parsing succeeds``() =
         let f = opt "arg" "a" "value" "description" |> reqOpt
         parse f "cmd --other-arg val --arg value -x"
-        =! Success ("value")
+        =! Ok ("value")
 
     [<Fact>]
     let ``req short name parsing succeeds``() =
         let f = opt "arg" "a" "value" "description" |> reqOpt
         parse f "cmd --other-arg val -a value -x"
-        =! Success ("value")
+        =! Ok ("value")
 
     [<Fact>]
     let ``req and its value tokens are removed after matching``() =
@@ -251,13 +251,13 @@ module reqOpt =
     let ``Absence of req fails``() =
         let f = opt "arg" "a" "value" "description" |> reqOpt
         parse f "cmd --other-arg value -x"
-        =! Failure ["Required argument --arg not found"]
+        =! Error ["Required argument --arg not found"]
 
     [<Fact>]
     let ``req without it's value fails``() =
         let f = opt "arg" "a" "value" "description" |> reqOpt
         parse f "cmd --other-arg val --arg"
-        =! Failure ["Argument --arg value is missing"]
+        =! Error ["Argument --arg value is missing"]
 
     [<Fact>]
     let ``req usage is returned if it succeeds``() =
@@ -282,7 +282,7 @@ module Arg =
     let ``arg parsing succeeds``() =
         let f = arg "value" "description"
         parse f "value"
-        =! Success (Some "value")
+        =! Ok (Some "value")
 
     [<Fact>]
     let ``arg and its value tokens are removed after matching``() =
@@ -294,7 +294,7 @@ module Arg =
     let ``Absence of arg succeeds with None``() =
         let f = arg "value" "description"
         parse f "  "
-        =! Success None
+        =! Ok None
 
     [<Fact>]
     let ``arg usage is returned if it succeeds``() =
@@ -314,7 +314,7 @@ module reqArg =
     let ``req name parsing succeeds``() =
         let f = arg  "value" "description" |> reqArg
         parse f " value "
-        =! Success ("value")
+        =! Ok ("value")
 
 
     [<Fact>]
@@ -329,7 +329,7 @@ module reqArg =
     let ``Absence of req fails``() =
         let f = arg "value" "description" |> reqArg
         parse f " "
-        =! Failure ["Required argument <value> not found"]
+        =! Error ["Required argument <value> not found"]
 
     [<Fact>]
     let ``req usage is returned if it succeeds``() =
@@ -354,7 +354,7 @@ module Applicative =
             }
 
         parse p "cmd --other-arg val --arg value -f -x"
-        =! Success( Some "value", true)
+        =! Ok( Some "value", true)
 
     [<Fact>]
     let ``Applicative combine results``() =
@@ -366,7 +366,7 @@ module Applicative =
             }
 
         parse p "cmd --other-arg val --arg value -x"
-        =! Success( Some "value", false)
+        =! Ok( Some "value", false)
 
     [<Fact>]
     let ``Applicative combine results (other direction)``() =
@@ -378,7 +378,7 @@ module Applicative =
             }
 
         parse p "cmd --other-arg val -f -x"
-        =! Success( None, true)
+        =! Ok( None, true)
 
     [<Fact>]
     let ``Applicative remove tokens when it succeeds``() =
@@ -402,7 +402,7 @@ module Applicative =
             }
 
         parse p "cmd -f --other-arg val -x"
-        =! Failure ["Required argument --arg not found"]
+        =! Error ["Required argument --arg not found"]
 
     [<Fact>]
     let ``Applicative fails if second fails``() =
@@ -414,7 +414,7 @@ module Applicative =
             }
 
         parse p "cmd --other-arg val --arg value -x"
-        =! Failure ["Required flag --flag not found"]
+        =! Error ["Required flag --flag not found"]
 
     [<Fact>]
     let ``Applicative combines failures if both fail``() =
@@ -426,8 +426,8 @@ module Applicative =
             }
 
         parse p "cmd --other-arg val -x"
-        =! Failure [ "Required argument --arg not found"
-                     "Required flag --flag not found"]
+        =! Error [ "Required argument --arg not found"
+                   "Required flag --flag not found"]
 
     [<Fact>]
     let ``Applicative remove matched tokens when first fails``() =
@@ -523,13 +523,13 @@ module Map =
     let ``map changes value when it succeeds`` (value: int) =
         let p = opt "arg" "a" "value" "description" |> reqOpt |> map int 
         parse p $"cmd -f --arg %d{value} -x"
-        =! Success value
+        =! Ok value
 
     [<Fact>]
     let ``map keeps failures`` () =
         let p = opt "arg" "a" "value" "description" |> reqOpt |> map int
         parse p $"cmd -f -x"
-        =! Failure [ "Required argument --arg not found" ]
+        =! Error [ "Required argument --arg not found" ]
 
     [<Property>]
     let ``map keeps remaining tokens intact`` (value: int) =
@@ -548,17 +548,17 @@ module OptMap =
     let ``optMap changes value when it succeeds`` (value: int) =
         let p = opt "arg" "a" "value" "description" |> optMap int
         parse p $"cmd -f --arg %d{value} -x"
-        =! Success (Some value)
+        =! Ok (Some value)
     [<Fact>]
     let ``optMap return None when it doesn't match``() =
         let p = opt "arg" "a" "value" "description" |> optMap int
         parse p $"cmd -f -x"
-        =! Success None
+        =! Ok None
     [<Fact>]
     let ``optMap keeps failures`` () =
         let p = opt "arg" "a" "value" "description" |> optMap int
         parse p $"cmd -f -x -a"
-        =! Failure [ "Argument --arg value is missing" ]
+        =! Error [ "Argument --arg value is missing" ]
 
     [<Property>]
     let ``optMap keeps remaining tokens intact`` (value: int) =
@@ -581,19 +581,19 @@ module Parse =
     let ``parse changes value when it succeeds`` (value: int) =
         let p = opt "arg" "a" "value" "description" |> reqOpt |> Fargo.parse parseInt
         parse p $"cmd -f --arg %d{value} -x"
-        =! Success ( value)
+        =! Ok ( value)
 
     [<Property>]
     let ``parse fail when value cannot be parsed`` () =
         let p = opt "arg" "a" "value" "description" |> reqOpt |> Fargo.parse parseInt
         parse p $"cmd -f --arg value -x"
-        =! Failure ["Bad int!"] 
+        =! Error ["Bad int!"] 
 
     [<Fact>]
     let ``parse keeps failures`` () =
         let p = opt "arg" "a" "value" "description" |> reqOpt |> Fargo.parse parseInt
         parse p $"cmd -f -x -a"
-        =! Failure [ "Argument --arg value is missing" ]
+        =! Error [ "Argument --arg value is missing" ]
 
     [<Property>]
     let ``parse keeps remaining tokens intact`` (value: int) =
@@ -623,24 +623,24 @@ module OptParse =
     let ``optParse changes value when it succeeds`` (value: int) =
         let p = opt "arg" "a" "value" "description" |> optParse parseInt
         parse p $"cmd -f --arg %d{value} -x"
-        =! Success (Some value)
+        =! Ok (Some value)
 
     [<Fact>]
     let ``optParse fail when value cannot be parsed`` () =
         let p = opt "arg" "a" "value" "description" |> optParse parseInt
         parse p $"cmd -f --arg value -x"
-        =! Failure ["Bad int!"] 
+        =! Error ["Bad int!"] 
 
     [<Fact>]
     let ``optParse return None when it doesn't match``() =
         let p = opt "arg" "a" "value" "description" |> optParse parseInt
         parse p $"cmd -f -x"
-        =! Success None
+        =! Ok None
     [<Fact>]
     let ``optParse keeps failures`` () =
         let p = opt "arg" "a" "value" "description" |> optParse parseInt
         parse p $"cmd -f -x -a"
-        =! Failure [ "Argument --arg value is missing" ]
+        =! Error [ "Argument --arg value is missing" ]
 
     [<Property>]
     let ``optParse keeps remaining tokens intact`` (value: int) =
@@ -667,19 +667,19 @@ module DefaultValue =
     let ``defaultValue keep original value when it succeeds`` (value: int) (def: int) =
         let p = opt "arg" "a" "value" "description" |> defaultValue $"%d{def}"
         parse p $"cmd -f --arg %d{value} -x"
-        =! Success $"%d{value}"
+        =! Ok $"%d{value}"
 
     [<Property>]
     let ``defaultValue fail when value cannot be parsed`` (value: int) (def: int) =
         let p = opt "arg" "a" "value" "description" |> defaultValue $"%d{def}"
         parse p $"cmd -f -x"
-        =! Success $"%d{def}"
+        =! Ok $"%d{def}"
 
     [<Fact>]
     let ``defaultValue keeps failures`` () =
         let p = opt "arg" "a" "value" "description" |> defaultValue "default"
         parse p $"cmd -f -x -a"
-        =! Failure [ "Argument --arg value is missing" ]
+        =! Error [ "Argument --arg value is missing" ]
 
     [<Property>]
     let ``defaultValue keeps remaining tokens intact`` (value: int) =
@@ -712,7 +712,7 @@ module Bind =
             }
 
         parse p "cmd sub --arg x"
-        =! Success("cmd", "sub")
+        =! Ok("cmd", "sub")
 
     [<Fact>]
     let ``bind fails if first fails``() =
@@ -724,7 +724,7 @@ module Bind =
             }
 
         parse p "other sub --arg x"
-        =! Failure [ "Command cmd not found"]
+        =! Error [ "Command cmd not found"]
 
     [<Fact>]
     let ``bind fails if second fails``() =
@@ -736,7 +736,7 @@ module Bind =
             }
 
         parse p "cmd other --arg x"
-        =! Failure [ "Command sub not found"]
+        =! Error [ "Command sub not found"]
 
     [<Fact>]
     let ``bind consume both tokens``() =
@@ -816,7 +816,7 @@ module Ret =
         let p = ret value
 
         parse p fargo
-        =! Success value
+        =! Ok value
 
 module Alt =
     [<Fact>]
@@ -825,7 +825,7 @@ module Alt =
                 <|> cmd "cmd2" null "desc cmd2"
         
         parse p "cmd1 --arg value"
-        =! Success "cmd1"
+        =! Ok "cmd1"
 
     [<Fact>]
     let ``Alt succeed if second succeed``() =
@@ -833,7 +833,7 @@ module Alt =
                 <|> cmd "cmd2" null "desc cmd2"
         
         parse p "cmd2 --arg value"
-        =! Success "cmd2"
+        =! Ok "cmd2"
 
     [<Fact>]
     let ``Alt fails if both fails``() =
@@ -841,7 +841,7 @@ module Alt =
                 <|> cmd "cmd2" null "desc cmd2"
         
         parse p "cmd3 --arg value"
-        =! Failure [ "Command cmd2 not found" ]
+        =! Error [ "Command cmd2 not found" ]
 
     [<Fact>]
     let ``Alt consumes succeeding token``() =
@@ -900,10 +900,10 @@ module Error =
     let ``Error always fails``(fargo: string) =
         let p = error "Nope"
         parse p fargo
-        =! Failure ["Nope"]
+        =! Error ["Nope"]
 
     [<Property>]
     let ``Errorf always fails``(NonNull fargo) =
         let p = errorf (fun tokens -> Token.toString tokens ) 
         parse p fargo
-        =! Failure [ fargo.TrimEnd(' ')]
+        =! Error [ fargo.TrimEnd(' ')]

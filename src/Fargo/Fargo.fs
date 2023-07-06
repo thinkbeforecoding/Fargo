@@ -30,14 +30,11 @@ module Core =
           Options: Usage list }
     type Tokens = Token list
 
-    type ParseResult<'t> =
-        | Success of 't
-        | Failure of string list
-        | Complete of string list * important: bool
+    type ParseResult<'t> = Result<'t, string list>
 
 
 
-    type Arg<'a> = int voption -> Tokens -> ParseResult<'a> * Tokens * Usages
+    type Arg<'a> = (Tokens -> ParseResult<'a> * Tokens * Usages) * (int -> Tokens -> string list * bool)
 
 module Usages =
     let merge x y = { Path = y.Path @ x.Path ; Options = x.Options @ y.Options}
@@ -49,9 +46,7 @@ module Usage =
         (match usage.Name with Some name -> token.Text = name | _ -> false) ||  (match usage.Alt with Some alt -> token.Text = alt | _ -> false)
 
     let isStop pos token =
-        match pos with
-        | ValueSome pos -> Extent.contains pos token.Extent
-        | ValueNone -> false
+        Extent.contains pos token.Extent
     
     let (|IsPrefix|_|) pos token =
         if isStop pos token then
@@ -60,7 +55,6 @@ module Usage =
             None
 
     let complete usage input =
-        Complete (
             [ match usage.Name with
               | Some name ->
                 if name.StartsWith(input, StringComparison.InvariantCultureIgnoreCase) then
@@ -70,7 +64,7 @@ module Usage =
               | Some alt ->
                     if alt.StartsWith(input, StringComparison.InvariantCultureIgnoreCase) then
                             alt
-              | None -> () ], false)
+              | None -> () ], false
 
     let req usages =
         match usages.Options with
@@ -95,295 +89,303 @@ module Fargo =
         let usage = { Name = Some name; Alt = Option.ofObj alt; Value = None; Description = description; Help = None; Type = UsageType.Required }
         let matchusages = { Path = [ usage ]; Options = [usage]} 
         let failusages = { Path = []; Options = [usage]} 
-        let notFound = Failure [$"Command %s{name} not found"]
-        fun pos tokens ->
+        let notFound = Error [$"Command %s{name} not found"]
+        let parse tokens =
+            match tokens with
+            | cmd :: tail when Usage.isMatch usage cmd ->
+                Ok name, tail, matchusages
+            | _ -> notFound, tokens, failusages
+        let complete pos tokens = 
             match tokens with
             | (Usage.IsPrefix pos & cmd) :: rest ->
-                Usage.complete usage cmd.Text, tokens, failusages
-            | cmd :: tail when Usage.isMatch usage cmd ->
-                Success name, tail, matchusages
+                Usage.complete usage cmd.Text
             | [] ->
-                match pos with
-                | ValueSome _ -> Usage.complete usage "", tokens, failusages
-                | _ -> notFound, tokens, failusages
-            | _ -> notFound, tokens, failusages
+                Usage.complete usage ""
+            | _ -> [], false
+        parse, complete
 
 
-    let rec private findArg usage usages complete pos tokens remaining =
+    let rec private findArg usage usages tokens remaining =
+        match tokens with
+        | x :: ((y :: tail) as rest) ->
+            if Usage.isMatch usage x  then
+                Ok (Some y.Text), remaining @ tail, usages
+            else
+                findArg usage usages rest (remaining @ [x])
+        | [x]  ->
+            if Usage.isMatch usage x then
+                    let name = usage.Name |> Option.defaultValue "<Unknown>"
+                    Error [$"Argument %s{name} value is missing"], remaining, usages
+            else
+                    Ok None, remaining @ tokens , usages
+        | [] ->
+            Ok None, remaining  , usages
+
+    let rec private completeArg usage usages complete pos tokens remaining =
         match tokens with
         | x :: ((y :: tail) as rest) ->
             if Usage.isStop pos x then
-                Usage.complete usage x.Text , remaining @ tokens, usages
+                Usage.complete usage x.Text 
             elif Usage.isMatch usage x  then
-                match pos with
-                | ValueSome pos ->
                     if pos <= y.Extent.End then
-                        Complete (complete y.Text, true), remaining @ tail, usages
+                        (complete y.Text tokens, true)
                     else
-                        Success (Some y.Text), remaining @ tail, usages
-
-                | ValueNone -> Success (Some y.Text), remaining @ tail, usages
+                        [], false
             else
-                findArg usage usages complete pos rest (remaining @ [x])
+                completeArg usage usages complete pos rest (remaining @ [x])
+
         | [x]  ->
             if Usage.isStop pos x then
-                Usage.complete usage x.Text , remaining @ tokens, usages
+                Usage.complete usage x.Text 
             elif Usage.isMatch usage x then
-                match pos with
-                | ValueSome pos ->
-                    Complete (complete "", true), remaining , usages
-                | ValueNone ->
-                    let name = usage.Name |> Option.defaultValue "<Unknown>"
-                    Failure [$"Argument %s{name} value is missing"], remaining, usages
+                    complete "" tokens, true
             else
-                match pos with
-                | ValueSome _ ->
-                    Usage.complete usage "", remaining @ tokens , usages
-                | _ ->
-                    Success None, remaining @ tokens , usages
+                    Usage.complete usage ""
         | [] ->
-            match pos with
-            | ValueSome _ ->
-                Usage.complete usage "" , remaining @ tokens, usages
-            | ValueNone -> Success None, remaining  , usages
+                Usage.complete usage ""
 
-    let opt name alt value description: Arg<string option> =
+    let optc name alt value description completer: Arg<string option> =
         let usage = { Name = Some ("--" + name); Alt = Usage.Short.ofString alt; Value = Some value; Description = description; Help = None; Type = UsageType.Arg }
         let usages = { Path = []; Options = [usage]}
-        fun pos tokens -> findArg usage usages (fun _ -> []) pos tokens []
+        let parse tokens = findArg usage usages tokens []
+        let complete pos tokens = completeArg usage usages completer pos tokens []
 
-    let arg value description: Arg<string option> =
+        parse, complete
+
+    let opt name alt value description: Arg<string option> =
+        optc name alt value description (fun _ _ -> [])
+
+
+    let argc value description completer: Arg<string option> =
         let usage = { Name = None; Alt = None; Value = Some value; Description = description; Help = None; Type = UsageType.Arg}
         let usages = { Path = []; Options = [usage]}
-        fun pos tokens ->
+        let parse  tokens =
             match tokens with
             | value :: tail ->
-                Success (Some value.Text), tail, usages
+                Ok (Some value.Text), tail, usages
             | [] ->
-                match pos with
-                | ValueSome _ -> Complete([],false), tokens, usages
-                | _ -> Success None, tokens, usages
+                Ok None, tokens, usages
+        let complete pos tokens =
+            match tokens with
+            | value :: tail ->
+                completer value.Text tail, false
+            | [] -> completer "" [], false
+        parse, complete
 
-    let optCompleter complete (arg: Arg<string option>) : Arg<string option> =
-        fun pos tokens ->
-            let result, rest, usages = arg pos tokens
-            match usages.Options with
-            | usage :: _ -> 
-                findArg usage usages complete pos tokens []
-            | _ -> result, tokens, usages
+    let arg value description =
+        argc value description (fun _ _ -> [])
 
-    let argCompleter complete (arg: Arg<string option>) : Arg<string option> =
-        fun pos tokens ->
-            let r, tokens, usages = arg pos tokens
-            match pos with
-            | ValueSome pos ->
-                match List.tryHead tokens with
-                | Some token ->
-                    if Extent.contains pos token.Extent then
-                        Complete(complete token.Text, true), tokens, usages
-                    else
-                        Complete([], false), tokens, usages
-                | None ->
-                    Complete (complete "", true), tokens, usages
-            | ValueNone ->
-                r, tokens, usages
                 
-    let reqArg (arg: Arg<'a option>) : Arg<'a> =
-        fun pos tokens ->
-            let result, rest, usages = arg pos tokens
+    let reqArg ((p,c): Arg<'a option>) : Arg<'a> =
+        let parse tokens =
+            let result, rest, usages = p tokens
             let reqResult = 
                 match result with
-                | Success (Some v) -> Success v
-                | Success None ->
+                | Ok (Some v) -> Ok v
+                | Ok None ->
                     let value =
                         usages.Options
                         |> List.tryHead
                         |> Option.bind (fun u -> u.Value)
                         |> Option.defaultValue "unknown"
-                    Failure [$"Required argument <%s{value}> not found"]
-                | Failure e -> Failure e
-                | Complete (c,i) -> Complete (c,i)
+                    Error [$"Required argument <%s{value}> not found"]
+                | Error e -> Error e
             reqResult, rest, Usage.req usages
+        parse, c
 
-    let reqOpt (arg: Arg<'a option>) : Arg<'a> =
-        fun pos tokens ->
-            let result, rest, usages = arg pos tokens
+    let reqOpt ((p,c): Arg<'a option>) : Arg<'a> =
+        let parse tokens =
+            let result, rest, usages = p tokens
             let reqResult = 
                 match result with
-                | Success (Some v) -> Success v
-                | Success None ->
+                | Ok (Some v) -> Ok v
+                | Ok None ->
                     let name =
                         usages.Options
                         |> List.tryHead
                         |> Option.bind (fun u -> u.Name)
                         |> Option.defaultValue "unknown"
-                    Failure [$"Required argument %s{name} not found"]
-                | Failure e -> Failure e
-                | Complete (c,i) -> Complete (c,i)
+                    Error [$"Required argument %s{name} not found"]
+                | Error e -> Error e
             reqResult, rest, Usage.req usages
+        parse, c
 
     let flag name alt description : Arg<bool> =
         let usage = {Name = Some ("--" + name); Alt = Usage.Short.ofString alt; Value = None; Description = description; Help = None; Type = UsageType.Arg}
         let usages = { Path = []; Options = [usage]} 
-        let rec findFlag pos tokens remaining =
+        let rec findFlag tokens remaining =
+            match tokens with
+            | x :: rest ->
+                if Usage.isMatch usage x  then
+                    Ok true, remaining @ rest, usages
+                else
+                    findFlag rest (remaining @ [x])
+            | [] ->
+                Ok false, remaining, usages
+        let rec completeFlag pos tokens =
             match tokens with
             | x :: rest ->
                 if Usage.isStop pos x then
-                    Usage.complete usage x.Text, remaining @ tokens, usages 
+                    Usage.complete usage x.Text
                 elif Usage.isMatch usage x  then
-                    Success true, remaining @ rest, usages
+                    [], false
                 else
-                    findFlag pos rest (remaining @ [x])
+                    completeFlag pos rest 
             | [] ->
-                match pos with
-                | ValueSome _ ->
-                    Usage.complete usage "" , remaining @ tokens, usages
-                | ValueNone -> Success false, remaining, usages
-        fun pos tokens -> findFlag pos tokens []
+                Usage.complete usage ""
+        let parse tokens = findFlag tokens []
+        let complete pos tokens = completeFlag pos tokens 
+        parse, complete
 
-    let reqFlag (f: Arg<bool>) : Arg<bool> =
-        fun pos tokens ->
-            let result, rest, usages = f pos tokens
+
+
+    let reqFlag ((p,c): Arg<bool>) : Arg<bool> =
+        let parse tokens =
+            let result, rest, usages = p tokens
 
             let reqResult =
                 match result with
-                | Success true -> Success true
-                | Success false ->
+                | Ok true -> Ok true
+                | Ok false ->
                     let name =
                         usages.Options
                         |> List.tryHead
                         |> Option.bind (fun u -> u.Name)
                         |> Option.defaultValue "unknown"
                         
-                    Failure [ $"Required flag %s{name} not found"]
-                | Failure e -> Failure e
-                | Complete (c,i) -> Complete (c,i)
+                    Error [ $"Required flag %s{name} not found"]
+                | Error e -> Error e
             reqResult, rest, Usage.req usages
+        parse, c
 
-    let parse (f: 'a -> Result<'b, string>) (arg: Arg<'a>) : Arg<'b>  =
-        fun pos tokens ->
-            match arg pos tokens with
-            | Success x, rest, usage ->
+    let parse (f: 'a -> Result<'b, string>) ((p,c): Arg<'a>) : Arg<'b>  =
+        let parse tokens =
+            match p  tokens with
+            | Ok x, rest, usage ->
                 match f x with
-                | Ok v -> Success v, rest, usage
-                | Error e -> Failure [e], tokens, usage
-            | Failure ex, rest, usage ->
-                Failure ex, rest, usage
-            | Complete (c,i), rest, usage -> Complete (c,i), rest, usage
+                | Ok v -> Ok v, rest, usage
+                | Error e -> Error [e], tokens, usage
+            | Error ex, rest, usage ->
+                Error ex, rest, usage
+        parse, c
 
-    let optParse (f: 'a -> Result<'b, string>) (arg: Arg<'a option>) : Arg<'b option>  =
-        fun pos tokens ->
-            match arg pos tokens with
-            | Success (Some x), rest, usage ->
+    let optParse (f: 'a -> Result<'b, string>) ((p,c): Arg<'a option>) : Arg<'b option>  =
+        let parse tokens =
+            match p tokens with
+            | Ok (Some x), rest, usage ->
                 match f x with
-                | Ok v -> Success (Some v), rest, usage
-                | Error e -> Failure [e], tokens, usage
-            | Success None, rest, usage -> 
-                Success None, rest, usage
-            | Failure ex, rest, usage ->
-                Failure ex, rest, usage
-            | Complete (c,i), rest, usage ->
-                Complete (c,i), rest, usage
+                | Ok v -> Ok (Some v), rest, usage
+                | Error e -> Error [e], tokens, usage
+            | Ok None, rest, usage -> 
+                Ok None, rest, usage
+            | Error ex, rest, usage ->
+                Error ex, rest, usage
+        parse, c
 
 
-    let listParse (f: 'a -> Result<'b, string>) (arg: Arg<'a list>) : Arg<'b list> =
-        fun pos tokens ->
-            match arg pos tokens with
-            | Success xs, rest, usage ->
+    let listParse (f: 'a -> Result<'b, string>) ((p,c): Arg<'a list>) : Arg<'b list> =
+        let parse tokens =
+            match p  tokens with
+            | Ok xs, rest, usage ->
                 let results = xs |> List.map f
                 let errors = results |> List.collect (function Error e -> [e] | _ -> [])
                 match errors with
                 | [] -> 
                     let values = results |> List.collect (function Ok v -> [v] | _ -> []) 
-                    Success values, rest, usage
+                    Ok values, rest, usage
                 | _ -> 
-                    Failure errors, tokens, usage
-            | Failure ex, rest, usage ->
-                Failure ex, rest, usage
-            | Complete (c,i), rest, usage ->
-                Complete (c,i), rest, usage
+                    Error errors, tokens, usage
+            | Error ex, rest, usage ->
+                Error ex, rest, usage
+        parse, c
 
     let all value description : Arg<Token list> =
-        fun pos tokens ->
-            Success tokens, [], { Path = []; Options = [{ Name = None; Alt = None; Value = Some value; Description = description; Help = None; Type = UsageType.Arg }] }
+        let parse tokens =
+            Ok tokens, [], { Path = []; Options = [{ Name = None; Alt = None; Value = Some value; Description = description; Help = None; Type = UsageType.Arg }] }
+        let complete _ _ = [], false
+        parse, complete
 
-    let validate (f: 'a -> bool) error (arg: Arg<'a>) : Arg<'a> =
-        fun pos tokens ->
-            let result, tokens, usages = arg pos tokens
+    let validate (f: 'a -> bool) error ((p,c): Arg<'a>) : Arg<'a> =
+        let parse tokens =
+            let result, tokens, usages = p tokens
             match result with
-            | Success v when not (f v) ->
-                Failure [error], tokens, usages
+            | Ok v when not (f v) ->
+                Error [error], tokens, usages
             | _ -> result, tokens, usages
+        parse, c
     
     let optValidate (f: 'a -> bool) error (arg: Arg<'a option>) : Arg<'a option> =
         validate (function Some v -> f v | None -> true) error arg
 
 
-    let nonEmpty error (arg: Arg<'a list>) : Arg<'a list> =
-        fun pos tokens ->
-            match arg pos tokens with
-            | Success [], rest, usage -> Failure [error], rest, usage
-            | Success v, rest, usage -> Success v, rest, usage
-            | Failure e, rest, usage -> Failure e, rest, usage 
-            | Complete (c,i), rest, usage -> Complete(c,i), rest, usage
+    let nonEmpty error ((p,c): Arg<'a list>) : Arg<'a list> =
+        let parse tokens=
+            match p tokens with
+            | Ok [], rest, usage -> Error [error], rest, usage
+            | Ok v, rest, usage -> Ok v, rest, usage
+            | Error e, rest, usage -> Error e, rest, usage 
+        parse, c
 
-    let map (f: 'a -> 'b) (arg: Arg<'a>) : Arg<'b> =
-        fun pos tokens ->
-            match arg pos tokens with
-            | Success x, rest, usage-> Success (f x), rest, usage
-            | Failure e, rest, usage -> Failure e, rest, usage 
-            | Complete (c,i), rest, usage -> Complete (c,i) , rest, usage 
+    let map (f: 'a -> 'b) ((p,c): Arg<'a>) : Arg<'b> =
+        let parse tokens =
+            match p tokens with
+            | Ok x, rest, usage-> Ok (f x), rest, usage
+            | Error e, rest, usage -> Error e, rest, usage 
+        parse,c
 
     let optMap f arg = map (Option.map f) arg
 
-    let defaultValue (d: 'a) (arg: Arg<'a option>) : Arg<'a> =
-            fun pos tokens ->
-                match arg pos tokens with
-                | Success None, rest, usage -> Success d, rest, usage
-                | Success (Some v), rest, usage -> Success v, rest, usage
-                | Failure e, rest, usage -> Failure e, tokens, usage
-                | Complete (c,i), rest, usage -> Complete (c,i), rest, usage
+    let defaultValue (d: 'a) ((p,c): Arg<'a option>) : Arg<'a> =
+        let parse tokens =
+            match p tokens with
+            | Ok None, rest, usage -> Ok d, rest, usage
+            | Ok (Some v), rest, usage -> Ok v, rest, usage
+            | Error e, rest, usage -> Error e, tokens, usage
+        parse,c
 
-    let map2 (f: 'a -> 'b -> 'c) (argx: Arg<'a>) (argy:Arg<'b>) : Arg<'c> =
-            fun pos tokens ->
-                match argx pos tokens with
-                | Success x, restx, usagex -> 
-                    match argy pos restx with
-                    | Success y, resty, usagey -> Success (f x y), resty, Usages.merge usagex usagey
-                    | Failure ey, resty, usagey -> Failure ey, resty, Usages.merge usagex usagey
-                    | Complete (cy,iy), resty, usagey -> Complete (cy,iy), resty, Usages.merge usagex usagey 
-                | Failure ex, restx, usagex -> 
-                    match argy pos restx with
-                    | Success y, resty, usagey -> Failure ex, resty, Usages.merge usagex usagey
-                    | Failure ey, resty, usagey -> Failure (ex@ey), resty, Usages.merge usagex usagey
-                    | Complete (cy,iy), resty, usagey -> Complete (cy,iy), resty, Usages.merge usagex usagey
-                | Complete (cx,ix), restx, usagex ->
-                    match argy pos restx with
-                    | Success y, resty, usagey -> Complete (cx,ix), restx, Usages.merge usagex usagey
-                    | Failure ey, resty, usagey -> Complete (cx,ix), restx, Usages.merge usagex usagey
-                    | Complete (cy,iy), resty, usagey -> 
-                        let (c,i) =
-                            match ix, iy with
-                            | false, false -> cx @ cy, false
-                            | true, true -> cx @ cy, true
-                            | true, false -> cx, true
-                            | false, true -> cy, true
-                        Complete (c,i), resty, Usages.merge usagex usagey
+    let map2 (f: 'a -> 'b -> 'c) ((px,cx): Arg<'a>) ((py,cy):Arg<'b>) : Arg<'c> =
+            let parse tokens =
+                match px tokens with
+                | Ok x, restx, usagex -> 
+                    match py restx with
+                    | Ok y, resty, usagey -> Ok (f x y), resty, Usages.merge usagex usagey
+                    | Error ey, resty, usagey -> Error ey, resty, Usages.merge usagex usagey
+                | Error ex, restx, usagex -> 
+                    match py restx with
+                    | Ok y, resty, usagey -> Error ex, resty, Usages.merge usagex usagey
+                    | Error ey, resty, usagey -> Error (ex@ey), resty, Usages.merge usagex usagey
+            let complete pos tokens =
+                let cpx, ix = cx pos tokens 
+                let cpy, iy = cy pos tokens
+                match ix, iy with
+                | true, false -> cpx, true
+                | false, true -> cpy, true
+                | true, true -> cpx @ cpy , true
+                | false, false -> cpx @ cpy , false
+            parse, complete
 
-    let bind (f: 'a -> Arg<'b>) (x: Arg<'a>) : Arg<'b> =
-        fun pos tokens ->
-            match x pos tokens with
-            | Success x, restx, usagex ->
-                    let y, resty, usagey = f x pos restx
+    let bind (f: 'a -> Arg<'b>) ((px,cx): Arg<'a>) : Arg<'b> =
+        let parse tokens =
+            match px tokens with
+            | Ok x, restx, usagex ->
+                    let pf, cf = f x
+                    let y, resty, usagey = pf restx
                     y, resty,  { Path = usagey.Path @ usagex.Path; Options = usagey.Options}
-            | Failure ex, restx, usagex ->
-                Failure ex, restx, usagex
-            | Complete (c,i), restx, usagex ->
-                Complete (c,i), restx, usagex
-
+            | Error ex, restx, usagex ->
+                Error ex, restx, usagex
+        let complete pos tokens =
+            match px tokens with
+            | Ok x, restx, usagex ->
+                let pf, cf = f x
+                cf pos restx
+            | Error _, _, _ ->
+                cx pos tokens
+        parse, complete
     let ret (x: 'a) : Arg<'a> =
-        fun pos tokens ->
-            Success x, tokens, Usages.empty
+        let parse tokens =
+            Ok x, tokens, Usages.empty
+        let complete _ _ = [], false
+        parse, complete
 
     type FargoBuilder() =
         member _.Bind(x,f) = bind f x
@@ -401,61 +403,63 @@ module Fargo =
 
     let fargo = FargoBuilder()
 
-    let alt (argy: Arg<_>) (argx: Arg<_>) : Arg<_> =
-        fun pos tokens ->
-            match argx pos tokens, argy pos tokens with
-            | (Complete (cx,ix) , restx, usagex), (Complete (cy,iy), _,_) -> 
-                let c,i =
-                    match ix,iy with
-                    | false, false -> cx @ cy, false
-                    | true, true -> cx @ cy, true
-                    | true, false -> cx, true
-                    | false, true -> cy, true
-                Complete (c,i) , restx, usagex
-            | (Complete (cx,ix) , restx, usagex), _ -> Complete (cx,ix) , restx, usagex
-            | _, (Complete (cy,iy) , resty, usagey) -> Complete (cy,iy), resty, usagey
-            | (Success x, restx, usagex), (_, _, usagey) -> Success x, restx, {  usagex with Options = usagex.Options @ usagey.Options }
-            | (_,_,usagex), (Success y, resty, usagey) -> Success y, resty, { usagey with Options = usagex.Options @ usagey.Options }
-            | (Failure ex,_,usagex), (Failure ey, _, usagey) -> Failure ey, tokens, {Path = []; Options = usagex.Options @ usagey.Options }
+    let alt ((py,cy): Arg<_>) ((px,cx): Arg<_>) : Arg<_> =
+        let parse tokens =
+            match px tokens, py tokens with
+            | (Ok x, restx, usagex), (_, _, usagey) -> Ok x, restx, {  usagex with Options = usagex.Options @ usagey.Options }
+            | (_,_,usagex), (Ok y, resty, usagey) -> Ok y, resty, { usagey with Options = usagex.Options @ usagey.Options }
+            | (Error ex,_,usagex), (Error ey, _, usagey) -> Error ey, tokens, {Path = []; Options = usagex.Options @ usagey.Options }
+        let complete pos tokens =
+            let (cpx, ix) = cx pos tokens
+            let (cpy, iy) = cy pos tokens
+            match ix,iy with
+            | false, false -> cpx @ cpy, false
+            | true, true -> cpx @ cpy, true
+            | true, false -> cpx, true
+            | false, true -> cpy, true
+        parse, complete
 
-    let optAlt (argy: Arg<'a option>) (argx: Arg<'a option>) : Arg<'a option> =
-            fun pos tokens ->
-            match argx pos tokens, argy pos tokens with
-            | (Complete (cx,ix) , restx, usagex), (Complete (cy,iy), _,_) -> 
-                let c,i =
-                    match ix,iy with
-                    | false, false -> cx @ cy, false
-                    | true, true -> cx @ cy, true
-                    | true, false -> cx, true
-                    | false, true -> cy, true
-                Complete (c,i) , restx, usagex
-            | (Complete (cx,ix) , restx, usagex), _ -> Complete (cx,ix) , restx, usagex
-            | _, (Complete (cy,iy) , resty, usagey) -> Complete (cy,iy), resty, usagey
-            | (Success (Some x), restx, usagex), (_, _, usagey) -> Success (Some x), restx, {  usagex with Options = usagex.Options @ usagey.Options }
-            | (_,_,usagex), (Success (Some y), resty, usagey) -> Success (Some y), resty, {  usagey with Options = usagex.Options @ usagey.Options }
-            | (Success None, rest,usagex), (_,_, usagey)
-            | (_, _, usagex), ( Success None, rest, usagey ) -> Success None, rest, Usages.merge usagex usagey
-            | (Failure _,_,usagex), (Failure ey, _, usagey) -> Failure (ey), tokens, Usages.merge usagex usagey
-
+    let optAlt ((py,cy): Arg<'a option>) ((px,cx): Arg<'a option>) : Arg<'a option> =
+        let parse tokens =
+            match px tokens, py tokens with
+            | (Ok (Some x), restx, usagex), (_, _, usagey) -> Ok (Some x), restx, {  usagex with Options = usagex.Options @ usagey.Options }
+            | (_,_,usagex), (Ok (Some y), resty, usagey) -> Ok (Some y), resty, {  usagey with Options = usagex.Options @ usagey.Options }
+            | (Ok None, rest,usagex), (_,_, usagey)
+            | (_, _, usagex), ( Ok None, rest, usagey ) -> Ok None, rest, Usages.merge usagex usagey
+            | (Error _,_,usagex), (Error ey, _, usagey) -> Error (ey), tokens, Usages.merge usagex usagey
+        let complete pos tokens =
+            let (cpx, ix) = cx pos tokens
+            let (cpy, iy) = cy pos tokens
+            match ix,iy with
+            | false, false -> cpx @ cpy, false
+            | true, true -> cpx @ cpy, true
+            | true, false -> cpx, true
+            | false, true -> cpy, true
+        parse, complete
 
     let error message : Arg<_> =
-        fun pos tokens ->
-            Failure [message], tokens, Usages.empty 
+        let parse tokens =
+            Error [message], tokens, Usages.empty 
+        let complete _ _ = [], false 
+        parse, complete
     let errors messages : Arg<_> =
-        fun pos tokens ->
-            Failure messages, tokens, Usages.empty 
+        let parse tokens =
+            Error messages, tokens, Usages.empty 
+        let complete _ _ = [], false 
+        parse, complete      
 
     let errorf<'t> messageFunc : Arg<'t> =
-        fun pos tokens ->
+        let parse tokens =
             let msg = messageFunc tokens
-            Failure [msg], tokens, Usages.empty
-
+            Error [msg], tokens, Usages.empty
+        let complete _ _ = [], false 
+        parse, complete      
     let cmdError<'t> : Arg<'t> =
         errorf (function [] -> "Missing command"| token :: _ -> $"Unknown command %s{token.Text}")
 
-    let help text (arg: Arg<'t>) : Arg<'t> =
-        fun pos tokens ->
-            let result, rest, usages = arg pos tokens
+    let help text ((p,c): Arg<'t>) : Arg<'t> =
+        let parse tokens =
+            let result, rest, usages = p tokens
             result, rest, {
                 Path = 
                     match usages.Path with
@@ -466,6 +470,7 @@ module Fargo =
                     | usage :: tail -> { usage with Help = Some text} :: tail
                     | _ -> usages.Options
             }
+        parse, c
 
 
 module Operators =
@@ -476,7 +481,7 @@ module Operators =
 module Completer =
     let empty (s: string) : string list = []
 
-    let choices (choices: string list) (s: string) =
+    let choices (choices: string list) (s: string) _ =
         [ for c in choices do
             if c.StartsWith(s) then
                 c
@@ -490,30 +495,25 @@ module Run =
     open System.Threading
     open System.Threading.Tasks
 
-    let toResult (arg: Arg<'a>) : Arg<ParseResult<'a> * Usages> =
-        fun pos tokens ->
-            let result, tokens, usages = arg pos tokens
-            Success (result, usages), tokens, usages
+    let toResult ((p,c): Arg<'a>) : Arg<ParseResult<'a> * Usages> =
+        let parse tokens =
+            let result, tokens, usages = p tokens
+            Ok (result, usages), tokens, usages
+        parse, c
     
-    let tryParseTokens (arg: Arg<'a>) tokens =
-        match arg ValueNone tokens with
-        | Success x, [], _ -> Ok x
-        | Core.Failure e, _, usages -> Error (e, usages)
-        | Success _, cmd :: _, usages ->
+    let tryParseTokens ((p,c): Arg<'a>) tokens =
+        match p tokens with
+        | Ok x, [], _ -> Ok x
+        | Error e, _, usages -> Error (e, usages)
+        | Ok _, cmd :: _, usages ->
             if cmd.Text.StartsWith("-") then
                 Error ([$"Unknown argument %s{cmd.Text}"], usages)
             else
                 Error ([$"Unknown command %s{cmd.Text}"], usages)
-        | Complete _, _, usage -> Error ([ "Unexpected completion" ], usage)
 
-    let complete (arg: Arg<_>) (pos: int) tokens =
-
-        match arg (ValueSome pos) tokens with
-        | Complete (choices,_), _,_ ->
-            choices
-        |  _,_,_ -> []
-
-
+    let complete ((p,c): Arg<_>) (pos: int) tokens =
+        let cp, _ = c pos tokens
+        cp
 
     let printErrors errs =
         for err in errs do
@@ -687,8 +687,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
 
     let pShell =
         let shells =  Map.ofList [ "powershell", Powershell ]
-        arg "shell" "the shell for which to emit the script"
-        |> argCompleter (Completer.choices (shells |> Map.toList |> List.map fst) )
+        argc "shell" "the shell for which to emit the script" (Completer.choices (shells |> Map.toList |> List.map fst) )
         |> reqArg
         |> parse (fun shell ->
                     match Map.tryFind shell shells with
@@ -697,53 +696,61 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
 
     let pRemoveAppName name : Arg<unit> =
         let exe = name + ".exe"
-        fun _pos tokens ->
+        let parse tokens =
             match tokens with
             | head :: tail 
                 when String.Equals(head.Text, name, StringComparison.InvariantCultureIgnoreCase) 
                 || String.Equals(head.Text, exe, StringComparison.InvariantCultureIgnoreCase) ->
-                Success(), tail, Usages.empty    
-            | _ -> Success(), tokens, Usages.empty
+                Ok(), tail, Usages.empty    
+            | _ -> Ok(), tokens, Usages.empty
+        parse, (fun _ _ -> [],false)
 
-    let getUsages (arg: Arg<'a>) : Arg<Result<'a, string list> * Usages> =
-        fun pos tokens ->
-            let result, tokens, usages = arg pos tokens 
+    let getUsages ((p,c): Arg<'a>) : Arg<Result<'a, string list> * Usages> =
+        let parse tokens =
+            let result, tokens, usages = p tokens 
             match result with
-            | Success r -> Success(Ok r, usages), tokens, usages
-            | Core.Failure e -> Success(Error e, usages), tokens, usages
-            | Complete(c,i) -> Complete(c,i), tokens, usages
+            | Ok r -> Ok(Ok r, usages), tokens, usages
+            | Error e -> Ok(Error e, usages), tokens, usages
+        parse, c
 
     type Help<'a> =
         | Run of 'a
         | Default of Tokens
         | Help of Tokens * Usages option
 
-    let runHelp (arg: Arg<Result<'a,Tokens>>) : Arg<Help<'a>> =
-        fun pos tokens ->
-            let help, tokens, u = flag "help" "h" "display help" pos tokens 
+    let runHelp ((p,c): Arg<Result<'a,Tokens>>) : Arg<Help<'a>> =
+        let ph,ch = flag "help" "h" "display help"
+        let parse tokens =
+            let help, tokens, u = ph tokens 
             match help with
-            | Success true ->
-                let r, tokens', usages = arg pos tokens                
+            | Ok true ->
+                let r, tokens', usages = p tokens                
                 match r with 
-                | Success (Ok _) ->
+                | Ok (Ok _) ->
                     // this is a command handled by pTop
-                    Success (Help(tokens', Some usages)), [], usages
-                | Success (Error tokens) ->
-                    Success (Help(tokens, None) ), [], usages
+                    Ok (Help(tokens', Some usages)), [], usages
+                | Ok (Error tokens) ->
+                    Ok (Help(tokens, None) ), [], usages
                 | _ ->
-                    Success(Help (tokens', Some usages)), [], usages
+                    Ok(Help (tokens', Some usages)), [], usages
 
-            | Success false ->
-                let r, tokens, usages = arg pos tokens
+            | Ok false ->
+                let r, tokens, usages = p tokens
                 match r with
-                | Success (Ok v) -> Success(Run v), tokens, usages
-                | Success (Error tokens) -> Success(Default tokens), [], usages
-                | Core.Failure e -> Core.Failure e, tokens, usages 
-                | Complete(c,i) -> Complete(c,i), tokens, usages
-            |  Core.Failure e ->
-                Core.Failure e, tokens, u
-            | Complete(c,i) ->
-                Complete(c,i), tokens, u
+                | Ok (Ok v) -> Ok(Run v), tokens, usages
+                | Ok (Error tokens) -> Ok(Default tokens), [], usages
+                | Error e -> Error e, tokens, usages 
+            |  Error e ->
+                Error e, tokens, u
+        let complete pos tokens =
+            let cph, ih = ch pos tokens
+            let cp, i = c pos tokens
+            match ih,i with
+            | true, true -> cph@cp, true
+            | false, false -> cph@cp, false
+            | true, false -> cph, true
+            | false, true -> cp, false
+        parse, complete
 
 
 
@@ -797,7 +804,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
         }
 
 
-    let run appName (arg: Arg<'a>) (cmdLine: string[]) (f: CancellationToken ->'a  -> Task<int>) : int =
+    let run appName ((p,c): Arg<'a>) (cmdLine: string[]) (f: CancellationToken ->'a  -> Task<int>) : int =
         use cts = new CancellationTokenSource()
         let mutable graceful = true
         Console.CancelKeyPress
@@ -821,19 +828,19 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
                             | [x] -> Token.ofString x.Text
                             | _ -> rest
                         for result in complete (fargo { do! pRemoveAppName appName
-                                                        return! arg}) pos cmdTokens do
+                                                        return! (p,c)}) pos cmdTokens do
                             printfn "%s" result  
                         return 0
                     | TopCompletion shell ->
                         printCompletion appName shell
                         return 0
                     | TopRun tokens ->
-                        return! innerRun arg tokens (f cts.Token)
+                        return! innerRun (p,c) tokens (f cts.Token)
                     | TopHelp(_, Some usages) ->
                         printHelp usages
                         return 0
                     | TopHelp(rest, None) ->
-                        let _,_,usages = arg ValueNone rest
+                        let _,_,usages = p rest
                         printHelp usages
                         return 0 
                 }
@@ -848,55 +855,44 @@ module Pipe =
     open FSharp.Core.CompilerServices
     
     let stdIn : Arg<string list> =
-        fun pos tokens -> 
-            match pos with
-            | ValueNone ->
-                if Console.IsInputRedirected then
-                    let mutable values = ListCollector()
-                    let mutable line = Console.In.ReadLine()
-                    while line <> null do
-                        values.Add(line)
-                        line <- Console.In.ReadLine()
-                    Success (values.Close()), tokens, Usages.empty
-                else
-                    Success [], tokens, Usages.empty 
-            | ValueSome _ -> Complete([],false), tokens, Usages.empty
+        let parse tokens =
+            if Console.IsInputRedirected then
+                let mutable values = ListCollector()
+                let mutable line = Console.In.ReadLine()
+                while line <> null do
+                    values.Add(line)
+                    line <- Console.In.ReadLine()
+                Ok (values.Close()), tokens, Usages.empty
+            else
+                Ok [], tokens, Usages.empty 
+        let complete _ _ = [], false
+        parse, complete
 
-    let orStdIn (arg: Arg<string option>) : Arg<string list> =
-        fun pos tokens ->
-            match pos with
-            | ValueNone ->
-                if Console.IsInputRedirected then
-                    let mutable values = ListCollector()
-                    let mutable line = Console.In.ReadLine()
-                    while line <> null do
-                        values.Add(line)
-                        line <- Console.In.ReadLine()
-                    Success (values.Close()), tokens, Usages.empty
-                else
-                    let result, tokens, usages = arg pos tokens
-                    match result with
-                    | Success (Some v) -> Success [v], tokens, usages
-                    | Success None -> Success [], tokens, usages
-                    | Failure e -> Failure e, tokens, usages
-                    | Complete(c,i) -> Complete(c,i), tokens, usages
-            | ValueSome _ -> 
-                let result, tokens, usages = arg pos tokens
+    let orStdIn ((p,c): Arg<string option>) : Arg<string list> =
+        let parse  tokens =
+            if Console.IsInputRedirected then
+                let mutable values = ListCollector()
+                let mutable line = Console.In.ReadLine()
+                while line <> null do
+                    values.Add(line)
+                    line <- Console.In.ReadLine()
+                Ok (values.Close()), tokens, Usages.empty
+            else
+                let result, tokens, usages = p tokens
                 match result with
-                | Success (Some v) -> Success [v], tokens, usages
-                | Success None -> Success [], tokens, usages
-                | Failure e -> Failure e, tokens, usages
-                | Complete(c,i) -> Complete(c,i), tokens, usages
+                | Ok (Some v) -> Ok [v], tokens, usages
+                | Ok None -> Ok [], tokens, usages
+                | Error e -> Error e, tokens, usages
+        parse, c
 
 module Env =
     let envVar name : Arg<string option> =
-        fun pos tokens ->
-            match pos with
-            | ValueNone ->
+        let parse tokens =
                 match Environment.GetEnvironmentVariable(name) with
-                | null -> Success None, tokens, Usages.empty
-                | value -> Success (Some value), tokens, Usages.empty
-            | ValueSome _ -> Complete([], false), tokens, Usages.empty
+                | null -> Ok None, tokens, Usages.empty
+                | value -> Ok (Some value), tokens, Usages.empty
+        let complete _ _ = [], false
+        parse, complete
                 
 
 

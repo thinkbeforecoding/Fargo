@@ -10,8 +10,8 @@ open System.Threading.Tasks
 
 let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
-let outUsage p input =
-    let _,_,usages = p ValueNone (Token.ofString input)
+let outUsage (p,c) input =
+    let _,_,usages = p (Token.ofString input)
     let w = new IO.StringWriter()
     Console.SetOut(w)
     printHelp usages
@@ -31,7 +31,7 @@ let outRun p input =
 
 [<Fact>]
 let ``arg usage``() =
-    let p = arg "value" "the value"
+    let p =  arg "value" "the value"
     outUsage p ""
     =! $"""Usage: [<value>]
 Options:
