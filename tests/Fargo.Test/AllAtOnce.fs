@@ -72,14 +72,10 @@ let complete pos input =
     Fargo.Run.complete p pos (Token.ofString input)
 
 let complete2 pos input =
-    let w = new IO.StringWriter()
-    Console.SetOut(w)
+    Testing.withStdout (fun _ ->
 
-    Run.run "test" p [|"complete"; "--position"; string pos;  input |] (fun _ x -> printfn "%A" x; Task.FromResult 0) |> ignore
-    Regex.Replace(w.ToString(),$"{'\x1b'}\[\d+m","").Split('\n')
-    |> Array.map (fun l -> l.TrimEnd())
-    |> Array.filter (not << String.IsNullOrEmpty)
-    |> String.concat Environment.NewLine
+        Run.run "test" p [|"complete"; "--position"; string pos;  input |] (fun _ x -> task { printfn "%A" x; return 0 }) |> ignore
+    )
 
 
 [<Fact>]

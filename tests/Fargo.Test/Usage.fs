@@ -12,22 +12,11 @@ let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
 let outUsage (p,c) input =
     let _,_,usages = p (Token.ofString input)
-    let w = new IO.StringWriter()
-    Console.SetOut(w)
-    printHelp usages
-    Regex.Replace(w.ToString(),$"{'\x1b'}\[\d+m","").Split('\n')
-    |> Array.map (fun l -> l.TrimEnd())
-    |> Array.filter (not << String.IsNullOrEmpty)
-    |> String.concat Environment.NewLine
+    Testing.withStdout(fun _ -> printHelp usages)
 
 let outRun p input =
-    let w = new IO.StringWriter()
-    Console.SetOut(w)
-    run "test" p [|input|] (fun _ v -> printfn "%A" v; Task.FromResult 0) |> ignore
-    Regex.Replace(w.ToString(),$"{'\x1b'}\[\d+m","").Split('\n')
-    |> Array.map (fun l -> l.TrimEnd())
-    |> Array.filter (not << String.IsNullOrEmpty)
-    |> String.concat Environment.NewLine
+    Testing.withStdout(fun _ -> 
+    run "test" p [|input|] (fun _ v -> task { printfn "%A" v; return 0}) |> ignore)
 
 [<Fact>]
 let ``arg usage``() =

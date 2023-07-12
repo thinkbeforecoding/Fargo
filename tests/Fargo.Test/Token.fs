@@ -104,3 +104,11 @@ let ``Token.ofString then Token.toString should give same result`` (NonNull (arg
     let trimmed = args.TrimEnd()
     let result = trimmed |> Token.ofString |> Token.toString
     result =! trimmed
+
+
+[<Fact>]
+let ``Token.ofString then Token.toString should give same result with empty quotes `` () =
+    let trimmed = "\"\""
+    let result = trimmed |> Token.ofString |> Token.toString
+    result =! trimmed
+

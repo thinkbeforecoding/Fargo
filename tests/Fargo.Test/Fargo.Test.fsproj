@@ -4,8 +4,13 @@
     <TargetFramework>net7.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
-  <ItemGroup >
-    <Compile Include="*.fs"/>
+  <ItemGroup>
+    <Compile Include="Testing.fs" />
+    <Compile Include="Token.fs" />
+    <Compile Include="Parsing.fs" />
+    <Compile Include="Usage.fs" />
+    <Compile Include="Completion.fs" />
+    <Compile Include="AllAtOnce.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Fargo\Fargo.fsproj" />

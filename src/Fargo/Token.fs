@@ -85,10 +85,9 @@ module Token =
                 result.Close()
             | n -> 
                 let txt = input.Substring(pos+1, n-pos-1)
-                if txt <> "" then
-                    result.Add { Text = txt
-                                 Extent = extent (pos+1) n
-                                 Quotes = Quotes quote }
+                result.Add { Text = txt
+                             Extent = extent (pos+1) n
+                             Quotes = Quotes quote }
                 loop input (n+1) &result
 
     let ofString (input: string) =
