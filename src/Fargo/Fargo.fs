@@ -156,6 +156,24 @@ module Fargo =
     let opt name alt value description: Arg<string option> =
         optc name alt value description (fun _ _ -> [])
 
+    let reqOpt (arg: Arg<'a option>) : Arg<'a> =
+        { Parse =
+            fun tokens ->
+                let result, rest, usages = arg.Parse tokens
+                let reqResult = 
+                    match result with
+                    | Ok (Some v) -> Ok v
+                    | Ok None ->
+                        let name =
+                            usages.Options
+                            |> List.tryHead
+                            |> Option.bind (fun u -> u.Name)
+                            |> Option.defaultValue "unknown"
+                        Error [$"Required argument %s{name} not found"]
+                    | Error e -> Error e
+                reqResult, rest, Usage.req usages
+          Complete = arg.Complete }
+
 
     let argc value description completer: Arg<string option> =
         let usage = { Name = None; Alt = None; Value = Some value; Description = description; Help = None; Type = UsageType.Arg}
@@ -195,24 +213,6 @@ module Fargo =
                 reqResult, rest, Usage.req usages
           Complete = arg.Complete
          }
-
-    let reqOpt (arg: Arg<'a option>) : Arg<'a> =
-        { Parse =
-            fun tokens ->
-                let result, rest, usages = arg.Parse tokens
-                let reqResult = 
-                    match result with
-                    | Ok (Some v) -> Ok v
-                    | Ok None ->
-                        let name =
-                            usages.Options
-                            |> List.tryHead
-                            |> Option.bind (fun u -> u.Name)
-                            |> Option.defaultValue "unknown"
-                        Error [$"Required argument %s{name} not found"]
-                    | Error e -> Error e
-                reqResult, rest, Usage.req usages
-          Complete = arg.Complete }
 
     let flag name alt description : Arg<bool> =
         let usage = {Name = Some ("--" + name); Alt = Usage.Short.ofString alt; Value = None; Description = description; Help = None; Type = UsageType.Arg}
@@ -306,7 +306,7 @@ module Fargo =
           Complete = arg.Complete
         }
 
-    let all value description : Arg<Token list> =
+    let all value description : Arg<Tokens> =
         { Parse =
             fun tokens ->
                 Ok tokens, [], { Path = []; Options = [{ Name = None; Alt = None; Value = Some value; Description = description; Help = None; Type = UsageType.Arg }] }
@@ -327,13 +327,7 @@ module Fargo =
 
 
     let nonEmpty error (arg: Arg<'a list>) : Arg<'a list> =
-        { Parse =
-            fun tokens ->
-                match arg.Parse tokens with
-                | Ok [], rest, usage -> Error [error], rest, usage
-                | Ok v, rest, usage -> Ok v, rest, usage
-                | Error e, rest, usage -> Error e, rest, usage 
-          Complete = arg.Complete }
+        validate (fun v -> not (List.isEmpty v)) error arg
 
     let map (f: 'a -> 'b) (arg: Arg<'a>) : Arg<'b> =
         { Parse =
@@ -665,8 +659,8 @@ module Run =
 
     type Shell = Powershell
 
-    let printCompletion appName =
-        function
+    let printCompletion appName shell =
+        match shell with
         | Powershell -> 
             printfn """
 Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
@@ -677,9 +671,6 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
 }        
             """ appName appName
      
-
-    let private (|Int|_|) (input: string) =
-        Parsers.Int32.tryParse input
 
     type TopCmd = CompleteCmd | CompletionCmd | RunCmd
     type Top =
