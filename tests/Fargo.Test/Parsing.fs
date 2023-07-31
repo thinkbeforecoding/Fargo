@@ -9,16 +9,16 @@ open DEdge.Diffract
 let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
 
-let parse ((p,_): Arg<'t>) input =
-    let result, _, _ = p (Tokens.ofString input)
+let parse (arg: Arg<'t>) input =
+    let result, _, _ = arg.Parse (Tokens.ofString input)
     result
 
-let rest ((p,c): Arg<'t>) input =
-    let _, tokens, _ = p (Tokens.ofString input)
+let rest (arg: Arg<'t>) input =
+    let _, tokens, _ = arg.Parse (Tokens.ofString input)
     Tokens.toString tokens
 
-let usage ((p,c): Arg<'t>) input =
-    let _, _, usages = p (Tokens.ofString input)
+let usage (arg: Arg<'t>) input =
+    let _, _, usages = arg.Parse (Tokens.ofString input)
     usages.Options
     
 
