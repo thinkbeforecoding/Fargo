@@ -107,7 +107,7 @@ module Tokens =
                 let quotes = 
                     if token.IndexOfAny([| ' ';'\'' |]) >= 0 then
                         Quotes '"'
-                    elif token.Contains('"') then
+                    elif token.IndexOf('\"') >= 0 then
                         Quotes '\''
                     else
                         NoQuotes
