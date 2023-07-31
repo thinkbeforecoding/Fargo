@@ -11,5 +11,9 @@
     <Compile Include="Fargo.fsi" />
     <Compile Include="Fargo.fs" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="paket.references" />
+    <None Include="paket.template" />
+  </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
