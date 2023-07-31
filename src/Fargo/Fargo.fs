@@ -10,7 +10,7 @@ open Console
 
 [<AutoOpen>]
 module Core =
-    type Completer = string -> string list
+    type Completer = string -> Token list -> string list
 
     [<Flags>]
     type UsageType =
@@ -492,9 +492,9 @@ module Operators =
     let (|>>) x v = x |> map (fun _ -> v) 
 
 module Completer =
-    let empty (s: string) : string list = []
+    let empty (s: string) (_: Tokens) : string list = []
 
-    let choices (choices: string list) (s: string) _ =
+    let choices (choices: string list) (s: string) (_: Tokens) =
         [ for c in choices do
             if c.StartsWith(s) then
                 c

@@ -1,112 +1,122 @@
-module Fargo
+namespace Fargo
 
 open System
 
-type Quotes =
-    | NoQuotes
-    | Quotes of char
-    | StartQuote of char
+[<AutoOpen>]
+module Core =
+    type Completer = string -> Token list -> string list
 
-type Token =
-    { Text: string
-      Start: int
-      End: int
-      Quotes: Quotes }
+    [<Flags>]
+    type UsageType =
+    | None = 0
+    | Arg = 1
+    | Required = 2
+    | Many = 4
 
-module Token =
-    /// converts a command line string to a list of tokens
-    val ofString:  string -> Token list 
-    /// converts a list of command line strings to a list of tokens
-    val ofList: string list -> Token list
-    /// convert the command line supplied to tokens
-    val ofCmdLine: string seq -> Token list
-    /// converts a token list to a string (keeping original position)
-    val toString: Token list -> string
+    type Usage = { Name: string option; Alt: string option; Value: string option; Description: string; Help: string option; Type: UsageType}
+        with
+            member IsRequired : bool 
+            member IsArg: bool 
+            member IsMany: bool
 
+    type Usages =
+        { Path:  Usage list
+          Options: Usage list }
+    type Tokens = Token list
 
-type Usage = { Name: string; Alt: string option; Description: string}
-type Usages = Usage list
-type CommandLine = Token list
-type Completer = string -> string list
+    type ParseResult<'t> = Result<'t, string list>
 
-type ParseResult<'t> =
-    | Success of 't
-    | Failure of string list
-    | Complete of string list * important: bool
+    type Parse<'a> = Tokens -> ParseResult<'a> * Tokens * Usages
+    type Complete = int -> Tokens -> string list * bool
+    type Arg<'a> =
+        { Parse: Parse<'a>
+          Complete: Complete }
 
-type Arg<'a> = int voption -> CommandLine -> ParseResult<'a> * CommandLine * Usages
+  module Usages =
+    val merge : Usages -> Usages -> Usages
+
+    val empty: Usages
 
 module Usage =
     val isMatch: Usage -> Token -> bool
-    val isStop: int voption -> Token -> bool
+    val isStop: int -> Token -> bool
     
-    val (|IsPrefix|_|): int voption -> Token -> unit option
+    val (|IsPrefix|_|): int -> Token -> unit option
 
-    val complete: Usage -> string -> ParseResult<'t>
-
-    val change: (string -> string) -> Usage list -> Usage list
-
-module Alt =
-    val ofString: name:string -> string option
+    val complete: Usage -> string -> string list * bool
 
 
-/// parse the command line arguments with the specifier arg parser and pass
-/// parsed result to the suppied function
-val cmd: name:string -> alt:string -> description:string -> Arg<string>
-val arg: name:string -> alt:string -> description:string -> Arg<string option>
-val completer: Completer -> Arg<string option> -> Arg<string option>
-
-val reqArg: Arg<'a option> -> Arg<'a>
-val flag: string -> string -> string -> Arg<bool>
-
-val reqFlag: Arg<bool> -> Arg<bool>
-
-val parse: ('a -> Result<'b, string>) ->  Arg<'a> -> Arg<'b>
-val optParse: ('a -> Result<'b, string>) -> Arg<'a option> -> Arg<'b option>
-val listParse: ('a -> Result<'b, string>) -> Arg<'a list> -> Arg<'b list>
-
-val nonEmpty: string -> Arg<'a list> -> Arg<'a list>
-
-val map: ('a -> 'b) -> Arg<'a> -> Arg<'b>
-val optMap: ('a -> 'b) -> Arg<'a option> -> Arg<'b option>
-val defaultValue: 'a ->  Arg<'a option>  -> Arg<'a>
-val map2: ('a -> 'b -> 'c) -> Arg<'a> -> Arg<'b> -> Arg<'c>
-val bind: ('a -> Arg<'b>) -> Arg<'a> -> Arg<'b>
-val ret: 'a -> Arg<'a>
-
-[<Class>]
-type CmdLineBuilder =
-    member Bind: Arg<'a> * ('a -> Arg<'b>) -> Arg<'b>
-    member BindReturn: Arg<'a> * ('a -> 'b) -> Arg<'b>
-    member MergeSources:  Arg<'a> * Arg<'b> -> Arg<'a * 'b>
-    member Return: 'a -> Arg<'a>
-    member ReturnFrom: Arg<'a> -> Arg<'a>
-    member Zero: unit -> Arg<unit>
-
-val cmdLine: CmdLineBuilder
-
-val alt: Arg<'a> -> Arg<'a> -> Arg<'a>
-val optAlt: Arg<'a option> -> Arg<'a option> -> Arg<'a option>
-val error: message:string -> Arg<'a>
-val errorf<'a> : messageFunc:(Token list -> string) -> Arg<'a>
-
-val cmdError<'a> : Arg<'a>
-
-module Int32 =
-    val tryParse: error:string -> input:string -> Result<int, string>
-module DateTime =
-    val tryParse: error:string -> input:string -> Result<DateTime, string>
 
 
-val tryParse:  Arg<'a> -> Token list -> Result<'a, string list * Usage list>
-val complete: Arg<'a> -> int -> Token list -> string list
+[<AutoOpen>]
+module Fargo =
+    /// parse the command line arguments with the specifier arg parser and pass
+    /// parsed result to the suppied function
+    val cmd: name:string -> alt:string -> description:string -> Arg<string>
+    val optc: name:string -> alt:string -> value: string -> description:string -> completer: Completer -> Arg<string option>
+    val opt: name:string -> alt:string -> value:string -> description:string -> Arg<string option>
+
+    val reqOpt: arg:Arg<'a option> -> Arg<'a> 
+
+    val argc: value: string -> description:string -> completer: Completer -> Arg<string option>
+    val arg: value: string -> description:string -> Arg<string option>
+
+    val reqArg: Arg<'a option> -> Arg<'a>
+    val flag: string -> string -> string -> Arg<bool>
+
+    val reqFlag: Arg<bool> -> Arg<bool>
+
+    val parse: ('a -> Result<'b, string>) ->  Arg<'a> -> Arg<'b>
+    val optParse: ('a -> Result<'b, string>) -> Arg<'a option> -> Arg<'b option>
+    val listParse: ('a -> Result<'b, string>) -> Arg<'a list> -> Arg<'b list>
+
+    val nonEmpty: string -> Arg<'a list> -> Arg<'a list>
+
+    val map: ('a -> 'b) -> Arg<'a> -> Arg<'b>
+    val optMap: ('a -> 'b) -> Arg<'a option> -> Arg<'b option>
+    val defaultValue: 'a ->  Arg<'a option>  -> Arg<'a>
+    val map2: ('a -> 'b -> 'c) -> Arg<'a> -> Arg<'b> -> Arg<'c>
+    val bind: ('a -> Arg<'b>) -> Arg<'a> -> Arg<'b>
+    val ret: 'a -> Arg<'a>
+
+    [<Class>]
+    type FargoBuilder =
+        member Bind: Arg<'a> * ('a -> Arg<'b>) -> Arg<'b>
+        member BindReturn: Arg<'a> * ('a -> 'b) -> Arg<'b>
+        member MergeSources:  Arg<'a> * Arg<'b> -> Arg<'a * 'b>
+        member Return: 'a -> Arg<'a>
+        member ReturnFrom: Arg<'a> -> Arg<'a>
+        member Zero: unit -> Arg<unit>
+
+    val fargo: FargoBuilder
+
+    val alt: Arg<'a> -> Arg<'a> -> Arg<'a>
+    val optAlt: Arg<'a option> -> Arg<'a option> -> Arg<'a option>
+    val error: message:string -> Arg<'a>
+    val errorf<'a> : messageFunc:(Token list -> string) -> Arg<'a>
+
+    val cmdError<'a> : Arg<'a>
+
+    val help: text:string -> arg: Arg<'t> -> Arg<'t> 
+
+module Operators =
+    val (<|>) : Arg<'a> -> Arg<'a> -> Arg<'a>
+    val (<|?>) : Arg<'a option> -> Arg<'a option> -> Arg<'a option>
+    val (|>>) : Arg<'a> -> 'b -> Arg<'b>
 
 
-val printUsage: Usage list -> unit
+[<AutoOpen>]
+module Run =
+    val tryParseTokens:  arg:Arg<'a> -> tokens:Tokens -> Result<'a, string list * Usages>
+    val complete: Arg<'a> -> int -> Tokens -> string list
 
-/// parse the command line arguments with the specifier arg parser and pass
-/// parsed result to the suppied function
-val run: appName:string -> arg:Arg<'a> -> cmdLine:string[] -> ('a -> unit) -> int
+
+    val printUsage: Usages -> unit
+    val printHelp: Usages -> unit
+
+    /// parse the command line arguments with the specifier arg parser and pass
+    /// parsed result to the suppied function
+    val run: appName:string -> arg:Arg<'a> -> cmdLine:string[] -> f:(Threading.CancellationToken -> 'a -> Threading.Tasks.Task<int>) -> int
 
 module Completer =
     /// an empty completer than returns no suggestions 
@@ -114,11 +124,6 @@ module Completer =
 
     // a completer that returns suggestions from specified list
     val choices: choices:string list -> Completer
-
-module Opertators =
-    val (<|>): Arg<'a> -> Arg<'a> -> Arg<'a>
-    val (<|?>): Arg<'a option> -> Arg<'a option> -> Arg<'a option>
-    val (|>>): Arg<'a> -> 'b -> Arg<'b>
 
 module Pipe =
     /// reads argument value from standard input
