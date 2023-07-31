@@ -37,7 +37,6 @@ module Extent =
         pos >= extent.Start && pos <= extent.End
 
 module Token =
-    open Microsoft.FSharp.Core.CompilerServices
 
     let inline extent s e = { Start = s; End = e}
 
@@ -54,41 +53,44 @@ module Token =
         | Quotes q -> Some q
         | StartQuote _ | NoQuotes -> None
 
+
+module Tokens =
+    open Microsoft.FSharp.Core.CompilerServices
     let rec private loop (input: string) (pos: int) (result: ListCollector<_> byref) =
-            if pos >= input.Length then
-                result.Close()
+        if pos >= input.Length then
+            result.Close()
+        else
+            if input[pos] = '"' then
+                loopQuote '"' input pos &result 
+            elif input[pos] = '\'' then
+                loopQuote '\'' input pos &result 
             else
-                if input[pos] = '"' then
-                    loopQuote '"' input pos &result 
-                elif input[pos] = '\'' then
-                    loopQuote '\'' input pos &result 
-                else
-                    match input.IndexOf(' ', pos) with
-                    | -1 ->
-                        result.Add { Text = input.Substring(pos)
-                                     Extent = extent pos input.Length
-                                     Quotes = NoQuotes}
-                        result.Close()
-                    | n -> 
-                        let txt = input.Substring(pos, n-pos)
-                        if txt <> "" then
-                            result.Add { Text = txt
-                                         Extent = extent pos n
-                                         Quotes = NoQuotes }
-                        loop input (n+1) &result
+                match input.IndexOf(' ', pos) with
+                | -1 ->
+                    result.Add { Text = input.Substring(pos)
+                                 Extent = Token.extent pos input.Length
+                                 Quotes = NoQuotes}
+                    result.Close()
+                | n -> 
+                    let txt = input.Substring(pos, n-pos)
+                    if txt <> "" then
+                        result.Add { Text = txt
+                                     Extent = Token.extent pos n
+                                     Quotes = NoQuotes }
+                    loop input (n+1) &result
     and loopQuote quote (input: string) (pos: int) (result: ListCollector<_> byref) =
-            match input.IndexOf(quote, pos+1) with
-            | -1 ->
-                result.Add { Text = input.Substring(pos+1)
-                             Extent = extent (pos+1) input.Length
-                             Quotes = StartQuote quote}
-                result.Close()
-            | n -> 
-                let txt = input.Substring(pos+1, n-pos-1)
-                result.Add { Text = txt
-                             Extent = extent (pos+1) n
-                             Quotes = Quotes quote }
-                loop input (n+1) &result
+        match input.IndexOf(quote, pos+1) with
+        | -1 ->
+            result.Add { Text = input.Substring(pos+1)
+                         Extent = Token.extent (pos+1) input.Length
+                         Quotes = StartQuote quote}
+            result.Close()
+        | n -> 
+            let txt = input.Substring(pos+1, n-pos-1)
+            result.Add { Text = txt
+                         Extent = Token.extent (pos+1) n
+                         Quotes = Quotes quote }
+            loop input (n+1) &result
 
     let ofString (input: string) =
         if isNull input then
@@ -109,7 +111,7 @@ module Token =
                         Quotes '\''
                     else
                         NoQuotes
-                result.Add({Text = token; Extent = extent pos (pos + token.Length); Quotes = quotes} )
+                result.Add({Text = token; Extent = Token.extent pos (pos + token.Length); Quotes = quotes} )
                 pos <- pos + token.Length + 1
 
         result.Close()
@@ -124,20 +126,23 @@ module Token =
         let rec loop pos tokens =
             match tokens with
             | token :: rest ->
-                let extent = outerExtent token
+                let extent = Token.outerExtent token
                 let startPad = max (extent.Start - pos) 0
                 builder.Append(' ', startPad) |> ignore
 
-                startQuote token
+                Token.startQuote token
                 |> Option.iter (fun q -> builder.Append(q) |> ignore)
                 
                 builder.Append(token.Text) |> ignore
                 
-                endQuote token
+                Token.endQuote token
                 |> Option.iter (fun q -> builder.Append(q) |> ignore)
                     
 
                 loop extent.End rest
             | [] -> builder.ToString()
         loop 0 (tokens |> List.sortBy (fun t -> t.Extent))
-
+ 
+    let contains pos (tokens: Token list) =
+        tokens
+        |> List.exists (Token.outerExtent >> (Extent.contains pos))

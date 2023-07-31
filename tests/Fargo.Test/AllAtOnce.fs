@@ -65,11 +65,11 @@ let p =
 
 
 let parse input =
-    tryParseTokens p (Token.ofString input)
+    tryParseTokens p (Tokens.ofString input)
     |> Result.mapError (fun (errs,usages) -> errs, [ for u in usages.Options -> u.Name |> Option.defaultValue "" ])
 
 let complete pos input =
-    Fargo.Run.complete p pos (Token.ofString input)
+    Fargo.Run.complete p pos (Tokens.ofString input)
 
 let complete2 pos input =
     Testing.withStdout (fun _ ->
@@ -215,5 +215,18 @@ funny"""
 let ``completion of command complete``() =
     complete2 15 "test voice sele"
     =! """select"""
+
+
+[<Fact>]
+let ``completion of command on a token in the middle``() =
+    complete2 10 "voice sele --voice funny"
+    =! "select"
+
+[<Fact>]
+let ``completion of command on a full token in the middle``() =
+    complete2 12 "voice select --voice funny"
+    =! "select"
+
+
 
 

@@ -8,7 +8,7 @@ open FsCheck.Xunit
 open DEdge.Diffract
 
 let complete (arg: Arg<_>) pos cmdLine =
-    complete arg pos (Token.ofString cmdLine)
+    complete arg pos (Tokens.ofString cmdLine)
 
 let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 

@@ -10,15 +10,15 @@ let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
 
 let parse ((p,_): Arg<'t>) input =
-    let result, _, _ = p (Token.ofString input)
+    let result, _, _ = p (Tokens.ofString input)
     result
 
 let rest ((p,c): Arg<'t>) input =
-    let _, tokens, _ = p (Token.ofString input)
-    Token.toString tokens
+    let _, tokens, _ = p (Tokens.ofString input)
+    Tokens.toString tokens
 
 let usage ((p,c): Arg<'t>) input =
-    let _, _, usages = p (Token.ofString input)
+    let _, _, usages = p (Tokens.ofString input)
     usages.Options
     
 
@@ -904,6 +904,6 @@ module Error =
 
     [<Property>]
     let ``Errorf always fails``(NonNull fargo) =
-        let p = errorf (fun tokens -> Token.toString tokens ) 
+        let p = errorf (fun tokens -> Tokens.toString tokens ) 
         parse p fargo
         =! Error [ fargo.TrimEnd(' ')]

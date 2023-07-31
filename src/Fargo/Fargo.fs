@@ -127,7 +127,7 @@ module Fargo =
             if Usage.isStop pos x then
                 Usage.complete usage x.Text 
             elif Usage.isMatch usage x  then
-                    if pos <= y.Extent.End then
+                    if pos > x.Extent.End && pos <= y.Extent.End then
                         (complete y.Text tokens, true)
                     else
                         [], false
@@ -376,11 +376,15 @@ module Fargo =
         let complete pos tokens =
             match px tokens with
             | Ok x, restx, usagex ->
-                let pf, cf = f x
-                cf pos restx
+                if not (Tokens.contains pos tokens) || Tokens.contains pos restx then
+                    let _pf, cf = f x
+                    cf pos restx
+                else
+                    cx pos tokens
             | Error _, _, _ ->
                 cx pos tokens
         parse, complete
+
     let ret (x: 'a) : Arg<'a> =
         let parse tokens =
             Ok x, tokens, Usages.empty
@@ -804,7 +808,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
         }
 
 
-    let run appName ((p,c): Arg<'a>) (cmdLine: string[]) (f: CancellationToken ->'a  -> Task<int>) : int =
+    let run appName ((p,c): Arg<'a>) (cmdLine: string[]) (f: CancellationToken -> 'a  -> Task<int>) : int =
         use cts = new CancellationTokenSource()
         let mutable graceful = true
         Console.CancelKeyPress
@@ -817,7 +821,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
             else
                 printfn $"{Colors.red}[Ctrl+C]Force stop{Colors.def}"
             )
-        let tokens = Token.ofCmdLine cmdLine
+        let tokens = Tokens.ofCmdLine cmdLine
         let runner = 
             innerRun (pRun appName) tokens (fun cmd ->
                 task {
@@ -825,7 +829,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
                     | TopComplete(pos, rest)  ->
                         let cmdTokens = 
                             match rest with
-                            | [x] -> Token.ofString x.Text
+                            | [x] -> Tokens.ofString x.Text
                             | _ -> rest
                         for result in complete (fargo { do! pRemoveAppName appName
                                                         return! (p,c)}) pos cmdTokens do

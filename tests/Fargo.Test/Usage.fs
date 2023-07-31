@@ -11,7 +11,7 @@ open System.Threading.Tasks
 let (=!) (actual:'a) (expected: 'a) = Differ.Assert(expected, actual )
 
 let outUsage (p,c) input =
-    let _,_,usages = p (Token.ofString input)
+    let _,_,usages = p (Tokens.ofString input)
     Testing.withStdout(fun _ -> printHelp usages)
 
 let outRun p input =
