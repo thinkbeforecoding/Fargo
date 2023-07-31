@@ -2,9 +2,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <Description>A functional argument parser with built in completion.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <!-- <Compile Include="Fargo.fsi" /> -->
     <Compile Include="Console.fs" />
     <Compile Include="Token.fs" />
     <Compile Include="Parsers.fs" />
