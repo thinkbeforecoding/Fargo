@@ -13,7 +13,7 @@ Fargo features:
 
 ## Getting started
 
-Fargo is distributed as a nuget:
+Fargo is distributed as a nuget [Fargo.CmdLine](https://www.nuget.org/packages/Fargo.CmdLine):
 
 ```pwsh
 dotnet add package Fargo.CmdLine
