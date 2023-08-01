@@ -464,7 +464,7 @@ The argument returns a list of values, and fails if no value has been provided, 
 The `run` function runs a parser:
 ```fsharp
 let p =
-   cmdLine { ... }
+    fargo { ... }
 
 [<EntryPoint>]
 let main (args: string[]) =
