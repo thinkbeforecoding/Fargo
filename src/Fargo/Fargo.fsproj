@@ -2,9 +2,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <Description>A functional argument parser with built in completion.</Description>
+    <PackageId>Fargo.CmdLine</PackageId>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageProjectUrl>https://github.com/thinkbeforecoding/Fargo</PackageProjectUrl>
+    <Copyright>Copyright (c) thinkbeforecoding 2023</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Authors>thinkbeforecoding, jeremie chassaing</Authors>
   </PropertyGroup>
   <ItemGroup>
-    <!-- <Compile Include="Fargo.fsi" /> -->
     <Compile Include="Console.fs" />
     <Compile Include="Token.fs" />
     <Compile Include="Parsers.fs" />
@@ -12,8 +20,6 @@
     <Compile Include="Fargo.fs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="paket.references" />
-    <None Include="paket.template" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
   </ItemGroup>
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

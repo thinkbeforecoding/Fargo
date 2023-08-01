@@ -2,12 +2,6 @@
   "version": 1,
   "isRoot": true,
   "tools": {
-    "paket": {
-      "version": "7.2.1",
-      "commands": [
-        "paket"
-      ]
-    },
     "nbgv": {
       "version": "3.6.133",
       "commands": [

@@ -2,4 +2,4 @@
 
 dotnet tool restore
 dotnet build -c Release
-dotnet paket pack bin/nuget
+dotnet pack -c Release --no-build -o bin/nuget
