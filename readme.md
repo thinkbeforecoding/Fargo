@@ -275,11 +275,11 @@ map2 (fun firstName lastName -> firstName + " " + lastName)
      // Arg<string>
 ```
 
-Is is clearer to use the applicative computation expression `cmdLine` instead:
+Is is clearer to use the applicative computation expression `fargo` instead:
 ```fsharp
-cmdLine {
-    let! firstName = arg "first-name" "f" "The user firstname" |> reqArg
-    and! lastName = arg "last-name" "l" "The user last name" |> reqArg
+fargo {
+    let! firstName = arg "first-name" "The user firstname" |> reqArg
+    and! lastName = arg "last-name" "The user last name" |> reqArg
     return firstName + " " + lastName
 }    // Arg<string>
 ```
@@ -290,10 +290,10 @@ type User =
       LastName string
       Age: int option }
 
-cmdLine {
-    let! firstName = arg "first-name" "f" "The user firstname" |> reqArg
-    and! lastName = arg "last-name" "l" "The user last name" |> reqArg
-    and! age = arg "age" "a" "The user age" |> optParse tryParseInt
+fargo {
+    let! firstName = arg "first-name" "The user firstname" |> reqArg
+    and! lastName = arg "last-name" "The user last name" |> reqArg
+    and! age = opt "age" null "age" "The user age" |> optParse tryParseInt
     return { FirstName = firstName
              LastName = lastName
              Age = age }
@@ -351,7 +351,7 @@ type FileCmd = Load | Save
 type Command =
 | Load of string
 | Save of string * bool
-cmdLine {
+fargo {
     match! (cmd "load" "ld" "loads the document" |~> FileCmd.Load)
            <|> (cmd "save" "sv" "saves the document" |~> FileCmd.Save)
            <|> (error "Invalid file command")  with
@@ -372,7 +372,7 @@ Since commands return their name, it is possible to match directly on it:
 type Command =
 | Load of string
 | Save of string * bool
-cmdLine {
+fargo {
     match! cmd "load" "ld" "loads the document"
            <|> cmd "save" "sv" "saves the document" with
     | "load" -> 
@@ -392,7 +392,7 @@ type Command =
 | Load of string
 | Save of string * bool
 | Touch of string
-cmdLine {
+fargo {
     match! cmd "load" "ld" "loads the document"
            <|> cmd "save" "sv" "saves the document" with
     | "load" -> 
@@ -420,7 +420,7 @@ type Command =
 | Load of string
 | Save of string * bool
 | Touch of string
-cmdLine {
+fargo {
     match! (cmd "load" "ld" "loads the document" |~> FileCmd.Load)
            <|> (cmd "save" "sv" "saves the document" |~> FileCmd.Save)
            <|> (ret FileCmd.Touch)  with
