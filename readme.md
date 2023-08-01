@@ -16,12 +16,12 @@ Fargo features:
 Fargo is distributed as a nuget:
 
 ```pwsh
-dotnet add package Fargo
+dotnet add package Fargo.CmdLine
 ```
 
 In a fsx script:
 ```fsharp
-#r "nuget: Fargo"
+#r "nuget: Fargo.CmdLine"
 ```
 
 You can try it with this simple hello world. Create a hello project:
@@ -29,7 +29,7 @@ You can try it with this simple hello world. Create a hello project:
 ```pwsh
 dotnet new console -lang F# -o ./hello
 cd ./hello
-dotnet add package Fargo
+dotnet add package Fargo.CmdLine
 ```
 
 and edit the `Program.fs` file:
@@ -37,11 +37,12 @@ and edit the `Program.fs` file:
 ```fsharp
 open Fargo
 
-let parser = arg "text" "t" "The text to display" |> reqArg
+let parser = opt "text" "t" "text" "The text to display" |> reqOpt
 
 [<EntryPoint>]
 let main args =
-    run "hello" parser args (fun text -> printfn "%s" text)
+    run "hello" parser args (fun ct text ->
+        task { printfn "%s" text; return 0; })
 ```
 
 build the project
@@ -56,7 +57,7 @@ $env:PATH += ";$p"
 ```
 
 Run the program
-```psws
+```pwsh
 hello --text "Hello world!"
 ```
 
@@ -66,11 +67,9 @@ hello --help
 ```
 will display:
 ```
-hello
-Required argument --text not found
-
-Usage:
-        --text, -t              The text to display (required)
+Usage: --text <text> 
+Arguments:
+    --text, -t <text>       The text to display
 ```
 
 If arguments are missing or incorrect, a detailed error is returned:
@@ -81,8 +80,9 @@ hello
 hello
 Required argument --text not found
 
-Usage:
-        --text, -t              The text to display (required)
+Usage: --text <text>
+Arguments:
+    --text, -t <text>       The text to display
 ```
 
 To enable completion in powershell, execute the following line:
@@ -123,11 +123,13 @@ It creates an `Arg<bool>` with a value of `Success true` when specified and a va
 
 ## Arg
 
-Arguments accept a value, and are optional by default:
+Arguments accept a positional value, and are optional by default:
 
 ```fsharp
-arg "value" "v" "the value" // Arg<string option>
+arg "value" "the value" // Arg<string option>
 ```
+
+Arguments are positional contrary to [options](#opt) which are named
 
 It creates an `Arg<string option>` with a value of `Success(Some "a value")` containing the value when specified, and `Success None` otherwise.
 
@@ -138,7 +140,34 @@ When the second argument is `null` the flag has no short alternate version.
 To make an argument required, use the `reqArg` function:
 
 ```fsharp
-arg "value" "v" "the value" |> reqArg |> Arg<string>
+arg "value" "the value" |> reqArg |> Arg<string>
+```
+
+It creates an `Arg<string>` with a value of `Success "a value"` containing the value when specified, and `Failure ["Require argument --value not found"]` otherwise.
+
+The first parameter is used as a placeholder in the usage syntax.
+
+
+## Opt
+
+Options accept a named value, and are optional by default:
+
+```fsharp
+opt "name" "n" "the-name" "the name" // Arg<string option>
+```
+
+It creates an `Arg<string option>` with a value of `Success(Some "a value")` containing the value when specified, and `Success None` otherwise.
+
+When the second argument is `null` the flag has no short alternate version.
+
+The third parameter is used as a placeholder in the usage syntax.
+
+## ReqArg
+
+To make an argument required, use the `reqArg` function:
+
+```fsharp
+opt "name" "n" "the-name" "the name" |> reqOpt |> Arg<string>
 ```
 
 It creates an `Arg<string>` with a value of `Success "a value"` containing the value when specified, and `Failure ["Require argument --value not found"]` otherwise.
@@ -220,17 +249,17 @@ In this example, when the argument is not specified, the value will be 0. When s
 A custom completer can be specified to enable completion on argument values:
 
 ```fsharp
-arg "value" "v" "the value" 
-|> completer Completer.choices ["one"; "two"; "three" ]
+argc "value" "the value" (Completer.choices ["one"; "two"; "three" ])
+optc "name" "n" "value" "the name" (Completer.choices ["a"; "b"; "c" ])
 ```
 
-Pressing the `tab` key after `--value` will suggest one of the specified values.
+Pressing the `tab` key after `--name` will suggest one of the specified values.
 
-The function passed to the `completer` function must have the following signature:
+The function passed must have the following signature:
 ```fsharp
-string -> string list
+string -> Token list -> string list
 ```
-The input string is the text of the argument value when completion is requested. The function should return a list of suggested values as strings.
+The input string is the text of the argument value when completion is requested. The token list contains all tokens that have not been parsed yet. The function should return a list of suggested values as strings.
 
 ## Map2 and Applicatives
 
@@ -315,7 +344,7 @@ The `error` function creates an `Arg<'t>` that always fails with specified error
 bind: ('a -> Arg<'b>) -> Arg<'a> -> Arg<'b>
 ```
 
-The use of `bind` directly is discouraged, prefere the computation expression:
+The use of `bind` directly is discouraged, prefer the computation expression:
 
 ```fsharp
 type FileCmd = Load | Save
@@ -327,10 +356,10 @@ cmdLine {
            <|> (cmd "save" "sv" "saves the document" |~> FileCmd.Save)
            <|> (error "Invalid file command")  with
     | FileCmd.Load ->
-        let! path = arg "path" "p" "the path"
+        let! path = opt "path" "p" "path" "the path"
         return Load path
     | FileCmd.Load ->
-        let! path = arg "path" "p" "the path"
+        let! path = opt "path" "p" "path" "the path"
         and! force = flag "force" "f" "overwrite file"
         return Save(path, force)
 } // Arg<Command>
@@ -347,10 +376,10 @@ cmdLine {
     match! cmd "load" "ld" "loads the document"
            <|> cmd "save" "sv" "saves the document" with
     | "load" -> 
-        let! path = arg "path" "p" "the path"
+        let! path = opt "path" "p" "path" "the path"
         return Load path
     | "save" ->
-        let! path = arg "path" "p" "the path"
+        let! path = opt "path" "p" "path" "the path"
         and! force = flag "force" "f" "overwrite file"
         return Save(path, force)
     | _ -> return error "Unknown command"
@@ -367,14 +396,14 @@ cmdLine {
     match! cmd "load" "ld" "loads the document"
            <|> cmd "save" "sv" "saves the document" with
     | "load" -> 
-        let! path = arg "path" "p" "the path"
+        let! path = opt "path" "p" "path" "the path"
         return Load path
     | "save" ->
-        let! path = arg "path" "p" "the path"
+        let! path = opt "path" "p" "path" "the path"
         and! force = flag "force" "f" "overwrite file"
         return Save(path, force)
     | _ ->
-        let! path = arg "path" "p" "the path"
+        let! path = opt "path" "p" "path" "the path"
         return Touch path
 } // Arg<Command>
 ```
@@ -439,8 +468,11 @@ let p =
 
 [<EntryPoint>]
 let main (args: string[]) =
-    run "myapp" p args (fun cmd ->
-        // excution of match commands here...
+    run "myapp" p args (fun ct cmd ->
+        task {
+            // excution of match commands here...
+            return 0
+        }
     )
 ```
 
