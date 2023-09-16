@@ -17,7 +17,7 @@ module Native =
 
 
 let checkWin32VT100 () =
-    let h =  Native.GetStdHandle(Native.STD_OUTPUT_HANDLE)
+    let h = Native.GetStdHandle(Native.STD_OUTPUT_HANDLE)
     let mutable x = 0u
     let r = Native.GetConsoleMode(h, &x)
     if not r then
