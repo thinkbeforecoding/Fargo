@@ -1,9 +1,9 @@
 module Fargo.Console
+
 open System
+open System.Runtime.InteropServices
 
 module Native =
-    open System.Runtime.InteropServices
-
     let STD_OUTPUT_HANDLE = -11
     let ENABLE_VIRTUAL_TERMINAL_PROCESSING = 4u
     let DISABLE_NEWLINE_AUTO_RETURN = 8u
@@ -15,9 +15,9 @@ module Native =
     [<DllImport("kernel32.dll", SetLastError=true)>]
     extern bool SetConsoleMode(IntPtr hConsoleHandle, uint32 dwMode )
 
-    
-let supportVT100 = 
-    let h = Native.GetStdHandle(Native.STD_OUTPUT_HANDLE)
+
+let checkWin32VT100 () =
+    let h =  Native.GetStdHandle(Native.STD_OUTPUT_HANDLE)
     let mutable x = 0u
     let r = Native.GetConsoleMode(h, &x)
     if not r then
@@ -27,6 +27,11 @@ let supportVT100 =
     else
         let r = Native.SetConsoleMode(h, x ||| Native.ENABLE_VIRTUAL_TERMINAL_PROCESSING ||| Native.DISABLE_NEWLINE_AUTO_RETURN)
         r 
+
+let supportVT100 =
+    RuntimeInformation.IsOSPlatform OSPlatform.Linux ||
+    RuntimeInformation.IsOSPlatform OSPlatform.OSX ||
+    checkWin32VT100 ()
 
 module Colors =
     let esc = "\x1B"
