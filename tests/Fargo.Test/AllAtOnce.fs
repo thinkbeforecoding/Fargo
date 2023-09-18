@@ -227,6 +227,7 @@ let ``completion of command on a full token in the middle``() =
     complete2 12 "voice select --voice funny"
     =! "select"
 
-
-
-
+[<Fact>]
+let ``test cross platform support`` () =
+    let ex = Record.Exception(Action(fun () -> ignore Console.supportVT100))
+    Assert.Null(ex)
