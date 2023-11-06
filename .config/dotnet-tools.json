@@ -7,6 +7,12 @@
       "commands": [
         "nbgv"
       ]
+    },
+    "paket": {
+      "version": "7.2.1",
+      "commands": [
+        "paket"
+      ]
     }
   }
 }
