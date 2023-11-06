@@ -326,15 +326,15 @@ The `<|>` can be used multiple times to combine more commands.
 
 ```fsharp
 type Cmd = Load | Save | Delete
-(cmd "load" "ld" "loads the document" |~> Load)
-<|> (cmd "save" "sv" "saves the document" |~> Save)
-<|> (cmd "delete" "del" "deletes the document" |~> Delete)
+(cmd "load" "ld" "loads the document" |>> Load)
+<|> (cmd "save" "sv" "saves the document" |>> Save)
+<|> (cmd "delete" "del" "deletes the document" |>> Delete)
 <|> (error "Invalid file command") 
 
 // Arg<Cmd>
 ```
 
-Here, for each command the `|~>` operator is used to replace the original `string` value, which is the name of the command, with the supplied value.
+Here, for each command the `|>>` operator is used to replace the original `string` value, which is the name of the command, with the supplied value.
 
 The `error` function creates an `Arg<'t>` that always fails with specified error message. It will be used only if all of the commands above fail, displaying a specific error message.
 
@@ -352,8 +352,8 @@ type Command =
 | Load of string
 | Save of string * bool
 fargo {
-    match! (cmd "load" "ld" "loads the document" |~> FileCmd.Load)
-           <|> (cmd "save" "sv" "saves the document" |~> FileCmd.Save)
+    match! (cmd "load" "ld" "loads the document" |>> FileCmd.Load)
+           <|> (cmd "save" "sv" "saves the document" |>> FileCmd.Save)
            <|> (error "Invalid file command")  with
     | FileCmd.Load ->
         let! path = opt "path" "p" "path" "the path"
@@ -421,8 +421,8 @@ type Command =
 | Save of string * bool
 | Touch of string
 fargo {
-    match! (cmd "load" "ld" "loads the document" |~> FileCmd.Load)
-           <|> (cmd "save" "sv" "saves the document" |~> FileCmd.Save)
+    match! (cmd "load" "ld" "loads the document" |>> FileCmd.Load)
+           <|> (cmd "save" "sv" "saves the document" |>> FileCmd.Save)
            <|> (ret FileCmd.Touch)  with
     | FileCmd.Load ->
         let! path = arg "path" "p" "the path"
