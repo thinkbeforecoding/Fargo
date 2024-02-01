@@ -598,6 +598,7 @@ module Run =
                         | Some alt -> name + ", " + alt
                     printfn $"    %-24s{cmd}%s{c.Description}"
                 | None -> ()
+            printfn $"%s{Colors.def}"
 
         match args with
         | [] -> ()
