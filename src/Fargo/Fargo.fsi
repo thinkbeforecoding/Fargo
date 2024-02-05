@@ -77,7 +77,7 @@ module Fargo =
     val reqArg: Arg<'a option> -> Arg<'a>
 
     /// A flag parser. Flags are matched by name and are optional by default. Value is false when not specified
-    val flag: string -> string -> string -> Arg<bool>
+    val flag: name:string -> alt:string -> description:string -> Arg<bool>
 
     /// Make a flag required.
     val reqFlag: Arg<bool> -> Arg<bool>
