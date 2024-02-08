@@ -658,7 +658,7 @@ module Run =
         printDescription usages
         printOptions usages.Options
 
-    type Shell = Powershell
+    type Shell = Powershell | Fish | Bash
 
     let printCompletion appName shell =
         match shell with
@@ -671,6 +671,26 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
         }
 }        
             """ appName appName
+        | Fish -> 
+        printfn """
+function __%s_completion
+    set -l count (commandline -pC)
+    set -l cmd (commandline -opc)
+    %s complete --position (math $count - (string length $cmd[1])) - 1 "$cmd[2..]"
+end
+complete -f -c %s -a '(__%s_completion)'
+        """ appName appName appName appName
+        | Bash ->
+            printfn """
+__%s_completion()
+{
+    local words=${COMP_WORDS[@]:1}
+    local first_len=${#COMP_WORDS[0]}
+    local point=$(( $COMP_POINT - $first_len - 1 ))
+    COMPREPLY=( $(compgen -W "$(%s complete --position $point ${words[*]})") )
+}
+complete -F __%s_completion %s
+        """ appName appName appName appName
      
 
     type TopCmd = CompleteCmd | CompletionCmd | RunCmd
@@ -692,7 +712,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
         |> defaultValue Int32.MaxValue
 
     let pShell =
-        let shells =  Map.ofList [ "powershell", Powershell ]
+        let shells =  Map.ofList [ "powershell", Powershell; "fish", Fish; "bash", Bash ]
         argc "shell" "the shell for which to emit the script" (Completer.choices (shells |> Map.toList |> List.map fst) )
         |> reqArg
         |> parse (fun shell ->
