@@ -682,7 +682,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
 function __%s_completion
     set -l count (commandline -pC)
     set -l cmd (commandline -opc)
-    %s complete --position (math $count - (string length $cmd[1])) - 1 "$cmd[2..]"
+    %s complete --position (math $count - (string length $cmd[1]) - 1) "$cmd[2..]"
 end
 complete -f -c %s -a '(__%s_completion)'
         """ appName appName appName appName
