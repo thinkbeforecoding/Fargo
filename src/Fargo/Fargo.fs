@@ -89,7 +89,7 @@ module Usage =
 module Fargo =
     let cmd name alt description: Arg<string> =
         let usage = { Name = Some name; Alt = Option.ofObj alt; Value = None; Description = description; Help = None; Type = UsageType.Required }
-        let matchusages = { Path = [ usage ]; Options = [usage]} 
+        let matchusages = { Path = [ usage ]; Options = []} 
         let failusages = { Path = []; Options = [usage]} 
         let notFound = Error [$"Command %s{name} not found"]
         { Parse =
@@ -377,7 +377,7 @@ module Fargo =
                 | Ok x, restx, usagex ->
                         let argy = f x
                         let y, resty, usagey = argy.Parse restx
-                        y, resty,  { Path = usagey.Path @ usagex.Path; Options = usagey.Options}
+                        y, resty, { Path = usagey.Path @ usagex.Path; Options = usagey.Options @ usagex.Options}
                 | Error ex, restx, usagex ->
                     Error ex, restx, usagex
           Complete =
@@ -550,7 +550,7 @@ module Run =
             usages.Options
             |> List.filter (fun u -> not (u.Name = None || u.IsRequired))
 
-        if cmds <> [] then printfn "[command]"
+        if cmds <> [] then printf "[command] "
         if opts <> [] then printf "[options] "
         for u in args do
             if u.IsArg then
