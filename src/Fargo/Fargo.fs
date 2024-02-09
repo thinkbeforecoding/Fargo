@@ -89,7 +89,7 @@ module Usage =
 module Fargo =
     let cmd name alt description: Arg<string> =
         let usage = { Name = Some name; Alt = Option.ofObj alt; Value = None; Description = description; Help = None; Type = UsageType.Required }
-        let matchusages = { Path = [ usage ]; Options = [usage]} 
+        let matchusages = { Path = [ usage ]; Options = []} 
         let failusages = { Path = []; Options = [usage]} 
         let notFound = Error [$"Command %s{name} not found"]
         { Parse =
@@ -377,7 +377,7 @@ module Fargo =
                 | Ok x, restx, usagex ->
                         let argy = f x
                         let y, resty, usagey = argy.Parse restx
-                        y, resty,  { Path = usagey.Path @ usagex.Path; Options = usagey.Options}
+                        y, resty, { Path = usagey.Path @ usagex.Path; Options = usagey.Options @ usagex.Options}
                 | Error ex, restx, usagex ->
                     Error ex, restx, usagex
           Complete =
@@ -386,7 +386,13 @@ module Fargo =
                 | Ok x, restx, usagex ->
                     if not (Tokens.contains pos tokens) || Tokens.contains pos restx then
                         let argy = f x
-                        argy.Complete pos restx
+                        let (cpx, ix) = argy.Complete pos restx
+                        let (cpy, iy) = arg.Complete pos tokens
+                        match ix,iy with
+                        | false, false -> cpx @ cpy, false
+                        | true, true -> cpx @ cpy, true
+                        | true, false -> cpx, true
+                        | false, true -> cpy, true
                     else
                         arg.Complete pos tokens
                 | Error _, _, _ ->
@@ -544,7 +550,7 @@ module Run =
             usages.Options
             |> List.filter (fun u -> not (u.Name = None || u.IsRequired))
 
-        if cmds <> [] then printfn "[command]"
+        if cmds <> [] then printf "[command] "
         if opts <> [] then printf "[options] "
         for u in args do
             if u.IsArg then
@@ -676,7 +682,7 @@ Register-ArgumentCompleter -Native  -CommandName %s -ScriptBlock {
 function __%s_completion
     set -l count (commandline -pC)
     set -l cmd (commandline -opc)
-    %s complete --position (math $count - (string length $cmd[1])) - 1 "$cmd[2..]"
+    %s complete --position (math $count - (string length $cmd[1]) - 1) "$cmd[2..]"
 end
 complete -f -c %s -a '(__%s_completion)'
         """ appName appName appName appName
