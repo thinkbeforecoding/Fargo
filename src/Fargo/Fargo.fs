@@ -386,7 +386,13 @@ module Fargo =
                 | Ok x, restx, usagex ->
                     if not (Tokens.contains pos tokens) || Tokens.contains pos restx then
                         let argy = f x
-                        argy.Complete pos restx
+                        let (cpx, ix) = argy.Complete pos restx
+                        let (cpy, iy) = arg.Complete pos tokens
+                        match ix,iy with
+                        | false, false -> cpx @ cpy, false
+                        | true, true -> cpx @ cpy, true
+                        | true, false -> cpx, true
+                        | false, true -> cpy, true
                     else
                         arg.Complete pos tokens
                 | Error _, _, _ ->
