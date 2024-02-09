@@ -179,7 +179,7 @@ module Run =
     val printOptions: Usage list -> unit
     val printHelp: Usages -> unit
 
-    type Shell = Powershell
+    type Shell = Powershell | Fish | Bash
 
     val printCompletion: appName:string -> shell:Shell -> unit
 

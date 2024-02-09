@@ -84,6 +84,8 @@ Usage: --text <text>
 Arguments:
     --text, -t <text>       The text to display
 ```
+## Tab Completion
+### Powershell
 
 To enable completion in powershell, execute the following line:
 ```
@@ -92,6 +94,14 @@ hello completion powershell | out-string | invoke-expression
 This line can be added to the $Profile.CurrentUserAllHost file to enable completion for every new session.
 
 Now, type `hello` followed by a space, and press tab or Ctrl+Space. The arguments are suggested.
+### Bash
+```bash
+hello completion bash >> ~/.bashrc
+```
+### Fish
+```fish
+hello completion fish > ~/.config/fish/completions/hello.fish
+```
 
 ## Arg<'t>
 
