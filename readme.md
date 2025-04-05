@@ -1,5 +1,7 @@
 # Fargo
 
+This repository has moved to Codeberg
+
 A reflectionless command line argument parser with integrated auto completion.
 
 Fargo features:
